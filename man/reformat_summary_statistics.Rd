@@ -13,8 +13,7 @@ reformat_summary_statistics(file_path)
 Defaults to NULL.}
 }
 \value{
-A data frame with the reformatted GWAS summary statistics. The standard
-        columns are: CHR, POS, REF, ALT, P, BETA, SE.
+An R6 object of class `GWASFormatter` containing the reformatted summary statistics.
 }
 \description{
 This function takes a file path to a parquet or CSV file of GWAS summary statistics

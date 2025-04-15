@@ -33,7 +33,7 @@ Rows: 5
 Columns: 12
 $ CHROM     <chr> "chr3", "chr3", "chr3", "chr3", "chr3"
 $ POS       <int> 90000011, 90000261, 90000274, 90000324, 90000366
-$ ID        <chr> "chr3-90000011-T-C", "chr3-90000261-GATT-G", "chr3-900002…
+$ ID        <chr> "chr3-90000011-T-C", "chr3-90000261-GATT-G", "chr3-900002…"
 $ ALLELE0   <chr> "T", "GATT", "T", "C", "T"
 $ ALLELE1   <chr> "C", "G", "A", "A", "G"
 $ A1FREQ    <dbl> 1.37775e-04, 2.91090e-04, 2.38259e-04, 1.62637e-04, 4.66158e…

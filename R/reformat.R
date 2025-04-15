@@ -8,8 +8,7 @@
 #' @param file_path Path to the GWAS summary statistics file (parquet or CSV).
 #' @param additional_cols A character vector of additional columns to keep from the original file.
 #'                       Defaults to NULL.
-#' @return A data frame with the reformatted GWAS summary statistics. The standard
-#'         columns are: CHR, POS, REF, ALT, P, BETA, SE.
+#' @return An R6 object of class `GWASFormatter` containing the reformatted summary statistics.
 #' @export
 reformat_summary_statistics <- function(file_path) {
   # Check if the file exists
