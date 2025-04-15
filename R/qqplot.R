@@ -1,3 +1,9 @@
+#' @title QQ plot for p-values
+#' @param pvalues A numeric vector of p-values or a list of numeric vectors of p-values.
+#' @param should.thin Logical indicating whether to thin the points for plotting. Default is TRUE.
+#' @param thin.obs.places Number of decimal places to round the observed p-values for thinning. Default is 2.
+#' @param thin.exp.places Number of decimal places to round the expected p-values for thinning. Default is 2.
+#' @export
 qqunif_plot = function(pvalues,
                        should.thin = T,
                        thin.obs.places = 2,

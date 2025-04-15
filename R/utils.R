@@ -16,7 +16,10 @@ getFreeMemoryGB <- function() {
   }
 }
 
-
+#' Take a random sample of rows from the summary stats table
+#' 
+#' @param g A GWASFormatter object.
+#' @param rows The number of rows to sample. Default is 100.
 compute_sample = function(g, rows = 100L) {
 
   df = DBI::dbGetQuery(

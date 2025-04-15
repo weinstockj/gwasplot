@@ -8,3 +8,9 @@
 ^docs$
 ^pkgdown$
 ^\.github$
+.*.duckdb$
+duckdb$
+db$
+tmp$
+.*.db$
+.*.tmp$

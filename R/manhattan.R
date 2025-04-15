@@ -1,3 +1,11 @@
+
+#' Plot a Manhattan plot from a gwas object
+#' 
+#' @param gwas A gwas object containing the data to plot.
+#' @param output_prefix The prefix for the output file name.
+#' @param lower_logp_threshold The lower threshold for the -log10(p-value) to plot. Default is 3.0.
+#' @return NULL
+#' @export
 manhattan = function(gwas, output_prefix, lower_logp_threshold = 3.0) {
 
   chrom_lookup = tibble::tibble(

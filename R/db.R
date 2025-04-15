@@ -1,3 +1,7 @@
+#' Connect to DuckDB
+#' @param read_only Logical. If TRUE, the connection will be read-only.
+#' @return A DuckDB connection object.
+#' @export 
 db_connect = function(read_only = FALSE) {
   con = DBI::dbConnect(duckdb::duckdb(), dbdir = "local.duckdb", read_only = FALSE)
 

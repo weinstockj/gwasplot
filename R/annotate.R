@@ -1,3 +1,9 @@
+#' Pull top hits from a gwas object
+#' 
+#' @param gwas A gwas object containing the data to plot.
+#' @param threshold The p-value threshold to filter the top hits. Default is 5e-8.
+#' @return A data frame with the top hits.
+#' @export
 annotate_top_hits = function(gwas, threshold = 5e-8) {
   df = gwas$data %>%
     dplyr::filter(PVALUE < threshold) %>%
