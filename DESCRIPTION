@@ -30,3 +30,5 @@ LinkingTo:
     Rcpp
 Depends: 
     R (>= 3.5)
+URL: https://github.com/weinstockj/gwasplot
+BugReports: https://github.com/weinstockj/gwasplot/issues
