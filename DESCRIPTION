@@ -1,34 +1,42 @@
 Package: gwasplot
 Type: Package
-Title: What the Package Does (Title Case)
+Title: High Performance GWAS Plotting And Annotation
 Version: 0.1.0
 Authors@R: c(
     person(
-      "Jane", "Doe",
-      email = "jane@example.com",
+        "Josh", "Weinstock",
+      email = "josh.weinstock@emory.edu",
       role = c("aut", "cre")
     )
   )
 Description: More about what it does (maybe more than one line).
     Continuation lines should be indented.
-License: What license is it under?
+License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true
 Imports: 
     arrow,
+    cli,
     cowplot,
+    DBI,
+    dbplyr,
     dplyr,
+    duckdb,
     ggplot2,
+    ghql,
     glue,
     httr2,
+    jsonlite,
     logger,
     magrittr,
+    ragg,
     Rcpp,
-    stringr
+    stringr,
+    tidyr
 RoxygenNote: 7.3.2
 LinkingTo: 
     Rcpp
 Depends: 
     R (>= 3.5)
-URL: https://github.com/weinstockj/gwasplot
+URL: https://github.com/weinstockj/gwasplot, https://weinstockj.github.io/gwasplot/
 BugReports: https://github.com/weinstockj/gwasplot/issues

@@ -4,12 +4,21 @@
 \name{gwasplot-package}
 \alias{gwasplot}
 \alias{gwasplot-package}
-\title{gwasplot: What the Package Does (Title Case)}
+\title{gwasplot: High Performance GWAS Plotting And Annotation}
 \description{
 More about what it does (maybe more than one line). Continuation lines should be indented.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/weinstockj/gwasplot}
+  \item \url{https://weinstockj.github.io/gwasplot/}
+  \item Report bugs at \url{https://github.com/weinstockj/gwasplot/issues}
+}
+
+}
 \author{
-\strong{Maintainer}: Jane Doe \email{jane@example.com}
+\strong{Maintainer}: Josh Weinstock \email{josh.weinstock@emory.edu}
 
 }
 \keyword{internal}
