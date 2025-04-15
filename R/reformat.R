@@ -184,7 +184,7 @@ GWASFormatter <- R6::R6Class(
         possibly_undo_log10p(self$detected_format) %>%
         possibly_replace_chr23(self$detected_format) %>%
         add_ID() %>%
-        dplyr::compute(temporary = FALSE, name = "summary_stats")
+        dplyr::compute(temporary = FALSE, overwrite = TRUE, name = "summary_stats")
     },
     kill = function() {
       DBI::dbDisconnect(self$con)
