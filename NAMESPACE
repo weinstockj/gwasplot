@@ -2,9 +2,12 @@
 
 export("%>%")
 export(annotate_top_hits)
+export(annotate_with_centromere)
 export(db_connect)
+export(find_nearest_gene)
 export(manhattan)
 export(qqunif_plot)
+export(query_ot_api_variants)
 export(reformat_summary_statistics)
 importFrom(Rcpp,sourceCpp)
 importFrom(dplyr,all_of)

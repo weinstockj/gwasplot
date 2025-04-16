@@ -26,6 +26,12 @@ annotate_top_hits = function(gwas, threshold = 5e-8) {
   return(df)
 }
 
+#' Find the nearest gene for each top hit
+#' 
+#' @param top_hits A data frame containing the top hits.
+#' @param threshold The distance threshold to consider a gene as nearest. Default is 1e5.
+#' @return A data frame with the nearest gene information.
+#' @export
 find_nearest_gene = function(top_hits, threshold = 1e5) {
 
   con = db_connect()
@@ -89,6 +95,11 @@ find_nearest_gene = function(top_hits, threshold = 1e5) {
     dplyr::select(-rn)
 }
 
+#' Annotate top hits with centromere information
+#' 
+#' @param top_hits A data frame containing the top hits.
+#' @return A data frame with the centromere information.
+#' @export
 annotate_with_centromere = function(top_hits) {
   con = db_connect()
 
@@ -363,6 +374,11 @@ genesForVariant <- function(variant_id) {
   })
 }
 
+#' Query Open Targets Genetics API for variant information
+#'  
+#' @param variant_id A string representing the variant ID (e.g., "19_44908822_C_T").
+#' @return A data frame containing variant information.
+#' @export
 query_ot_api_variants <- function(variant_id = "19_44908822_C_T") {
   # Check if the variant ID argument is empty or null
   if (is.null(variant_id) || variant_id == "") {
