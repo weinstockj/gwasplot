@@ -41,7 +41,7 @@ output from regenie or SAIGE and reformats it to have a standard set of columns.
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">reformat_summary_statistics</span><span class="op">(</span><span class="va">file_path</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">reformat_summary_statistics</span><span class="op">(</span><span class="va">file_path</span>, use_cache <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -52,9 +52,8 @@ output from regenie or SAIGE and reformats it to have a standard set of columns.
 <dd><p>Path to the GWAS summary statistics file (parquet or CSV).</p></dd>
 
 
-<dt id="arg-additional-cols">additional_cols<a class="anchor" aria-label="anchor" href="#arg-additional-cols"></a></dt>
-<dd><p>A character vector of additional columns to keep from the original file.
-Defaults to NULL.</p></dd>
+<dt id="arg-use-cache">use_cache<a class="anchor" aria-label="anchor" href="#arg-use-cache"></a></dt>
+<dd><p>Logical. If TRUE, uses the cached table 'summary_stats' instead of reading the file again.</p></dd>
 
 </dl></div>
     <div class="section level2">
