@@ -166,14 +166,15 @@ annotate_with_chip_genes = function(top_hits) {
   chip_df = tibble::tibble(
       gene_name = chip_genes
     ) %>%
-    dplyr::distinct(.)
+    dplyr::distinct(.) %>%
+    dplyr::mutate(
+      is_chip_gene = TRUE
+    )
+    
 
   dplyr::copy_to(
     con,
-    chip_genes %>%
-      dplyr::mutate(
-        is_chip_gene = TRUE
-      ),
+    chip_df,
     name = "chip_genes",
     temporary = FALSE,
     overwrite = TRUE
