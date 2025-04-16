@@ -4,7 +4,7 @@
   free_RAM = getFreeMemoryGB()
 
   set_RAM = floor(free_RAM * 0.8) # Set to 80% of free RAM
-  set_RAM = 10
+  #set_RAM = 10
   message(glue::glue("Setting duckdb_max_memory to {set_RAM}GB, using 80% of available system memory."))
   options(duckdb_max_memory = glue("{set_RAM}GB")) # Or any other reasonable default
 
