@@ -6,19 +6,20 @@
 #' output from regenie or SAIGE and reformats it to have a standard set of columns.
 #'
 #' @param file_path Path to the GWAS summary statistics file (parquet or CSV).
-#' @param additional_cols A character vector of additional columns to keep from the original file.
-#'                       Defaults to NULL.
+#' @param use_cache Logical. If TRUE, uses the cached table 'summary_stats' instead of reading the file again.
 #' @return An R6 object of class `GWASFormatter` containing the reformatted summary statistics.
 #' @export
-reformat_summary_statistics <- function(file_path) {
+reformat_summary_statistics <- function(file_path, use_cache = FALSE) {
   # Check if the file exists
   if (!file.exists(file_path)) {
     stop(paste("File not found:", file_path))
   }
 
-  gwas = GWASFormatter$new(file_path)
+  gwas = GWASFormatter$new(file_path, use_cache)
 
-  gwas$reformat()
+  if (!use_cache) {
+    gwas$reformat()
+  }
 
   return(gwas)
 }
@@ -148,26 +149,31 @@ GWASFormatter <- R6::R6Class(
     data_names = NULL,
     detected_format = NULL,
     file_path = NULL,
-    initialize = function(file_path) {
+    initialize = function(file_path, use_cache = FALSE) {
       self$file_path = file_path
       self$con = db_connect()
 
       file_ext <- tolower(tools::file_ext(file_path))
 
-      if (file_ext == "parquet") {
-        tryCatch({
-          self$data = tbl(self$con, glue("read_parquet('{file_path}')"))
-        }, error = function(e) {
-          stop(paste("Error reading parquet file:", e$message))
-        })
-      } else if (file_ext == "csv") {
-        tryCatch({
-          self$data = tbl(self$con, glue("read_csv('{file_path}')"))
-        }, error = function(e) {
-          stop(paste("Error reading CSV file:", e$message))
-        })
+      if (use_cache) {
+        cli::cli_alert_info("Using cached table 'summary_stats'")
+        self$data = tbl(self$con, "summary_stats")
       } else {
-        stop("Unsupported file type. Please provide a parquet or CSV file.")
+          if (file_ext == "parquet") {
+            tryCatch({
+              self$data = tbl(self$con, glue("read_parquet('{file_path}')"))
+            }, error = function(e) {
+              stop(paste("Error reading parquet file:", e$message))
+            })
+        } else if (file_ext == "csv") {
+            tryCatch({
+              self$data = tbl(self$con, glue("read_csv('{file_path}')"))
+            }, error = function(e) {
+              stop(paste("Error reading CSV file:", e$message))
+            })
+        } else {
+            stop("Unsupported file type. Please provide a parquet or CSV file.")
+        }
       }
 
       self$data_names = self$data %>%
@@ -175,9 +181,13 @@ GWASFormatter <- R6::R6Class(
         dplyr::collect(.) %>%
         names()
 
-      self$detected_format = detect_format(self$data_names)
+      if(!use_cache) {
+        self$detected_format = detect_format(self$data_names)
+      } else {
+        self$detected_format = "original format unknown"
+      }
     },
-    reformat = function() {
+    reformat = function(use_cache = FALSE) {
       self$data = self$data %>%
         reformat_names(self$detected_format) %>%
         possibly_undo_log10p(self$detected_format) %>%
