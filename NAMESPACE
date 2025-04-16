@@ -3,6 +3,7 @@
 export("%>%")
 export(annotate_top_hits)
 export(annotate_with_centromere)
+export(annotate_with_chip_genes)
 export(db_connect)
 export(find_nearest_gene)
 export(manhattan)

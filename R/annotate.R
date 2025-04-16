@@ -142,6 +142,61 @@ annotate_with_centromere = function(top_hits) {
     )
 }
 
+#' Annotate top hits with CHIP gene information
+#' 
+#' @param top_hits A data frame containing the top hits.
+#' @return A data frame with the CHIP gene information.
+#' @export
+annotate_with_chip_genes = function(top_hits) {
+
+  if (!"gene_name" %in% names(top_hits)) {
+    cli::cli_abort("top_hits must contain a gene_name column; did you run find_nearest_gene?")
+  }
+
+  con = db_connect()
+
+  dplyr::copy_to(
+    con,
+    top_hits,
+    name = "top_hits",
+    temporary = FALSE,
+    overwrite = TRUE
+  )
+
+  chip_df = tibble::tibble(
+      gene_name = chip_genes
+    ) %>%
+    dplyr::distinct(.)
+
+  dplyr::copy_to(
+    con,
+    chip_genes %>%
+      dplyr::mutate(
+        is_chip_gene = TRUE
+      ),
+    name = "chip_genes",
+    temporary = FALSE,
+    overwrite = TRUE
+  )
+
+  sql = glue("
+  SELECT
+    t.*,
+    c.is_chip_gene
+  FROM top_hits t
+  LEFT JOIN chip_genes c ON (t.gene_name = c.gene_name)
+  ")
+
+  DBI::dbGetQuery(con, sql) %>%
+    tibble::as_tibble(.) %>%
+    dplyr::mutate(
+      is_chip_gene = dplyr::case_when(
+        is.na(is_chip_gene) ~ FALSE,
+        TRUE ~ is_chip_gene
+      )
+    )
+}
+
 query_ot_api_v2g = function(variant_id = "19_44908822_C_T", pageindex = 0, pagesize = 20) {
 
 
