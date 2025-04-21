@@ -2,18 +2,46 @@
 % Please edit documentation in R/annotate.R
 \name{find_nearest_gene}
 \alias{find_nearest_gene}
-\title{Find the nearest gene for each top hit}
+\alias{find_nearest_gene.GWASFormatter}
+\alias{find_nearest_gene.tbl_df}
+\title{Find the nearest gene for variants}
 \usage{
-find_nearest_gene(top_hits, threshold = 1e+05)
+find_nearest_gene(x, ...)
+
+\method{find_nearest_gene}{GWASFormatter}(x, threshold = 1e+05, ...)
+
+\method{find_nearest_gene}{tbl_df}(
+  x,
+  threshold = 1e+05,
+  chrom_col = "CHROM",
+  pos_col = "POS",
+  id_col = "ID",
+  ...
+)
 }
 \arguments{
-\item{top_hits}{A data frame containing the top hits.}
+\item{x}{A gwas object or tibble containing variant data.}
+
+\item{...}{Additional arguments passed to methods.}
 
 \item{threshold}{The distance threshold to consider a gene as nearest. Default is 1e5.}
+
+\item{chrom_col}{Name of the column containing chromosome information. Default is "CHROM".}
+
+\item{pos_col}{Name of the column containing position information. Default is "POS".}
+
+\item{id_col}{Name of the column containing variant IDs. Default is "ID".}
 }
 \value{
-A data frame with the nearest gene information.
+The input object with gene annotations added.
 }
 \description{
-Find the nearest gene for each top hit
+Find the nearest gene for variants
 }
+\section{Methods (by class)}{
+\itemize{
+\item \code{find_nearest_gene(GWASFormatter)}: Find the nearest gene for each variant in a gwas object
+
+\item \code{find_nearest_gene(tbl_df)}: Find the nearest gene for each variant in a tibble
+
+}}

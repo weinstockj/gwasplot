@@ -1,11 +1,18 @@
-#' Pull top hits from a gwas object
-#' 
-#' @param gwas A gwas object containing the data to plot.
+#' Pull top hits from a GWASFormatter or a data.frame/tibble
+#'
+#' @param x A GWASFormatter object, data.frame, or tibble.
 #' @param threshold The p-value threshold to filter the top hits. Default is 5e-8.
-#' @return A data frame with the top hits.
+#' @param ... Additional arguments (unused).
+#' @return For GWASFormatter, a tibble of filtered hits; for data.frame/tibble, a filtered data.frame/tibble.
 #' @export
-annotate_top_hits = function(gwas, threshold = 5e-8) {
-  df = gwas$data %>%
+select_top_hits <- function(x, threshold = 5e-8, ...) {
+  UseMethod("select_top_hits")
+}
+
+#' @describeIn select_top_hits Method for GWASFormatter objects
+#' @export
+select_top_hits.GWASFormatter <- function(x, threshold = 5e-8, ...) {
+  df = x$data %>%
     dplyr::filter(PVALUE < threshold) %>%
     dplyr::collect(.)
 
@@ -22,13 +29,27 @@ annotate_top_hits = function(gwas, threshold = 5e-8) {
   return(df)
 }
 
-#' Find the nearest gene for each top hit
-#' 
-#' @param top_hits A data frame containing the top hits.
-#' @param threshold The distance threshold to consider a gene as nearest. Default is 1e5.
-#' @return A data frame with the nearest gene information.
+#' @describeIn select_top_hits Method for data.frame/tibble objects
 #' @export
-find_nearest_gene = function(gwas, threshold = 1e5) {
+select_top_hits.data.frame <- function(x, threshold = 5e-8, ...) {
+  x %>%
+    dplyr::filter(PVALUE < threshold)
+}
+
+#' Find the nearest gene for variants
+#' 
+#' @param x A gwas object or tibble containing variant data.
+#' @param ... Additional arguments passed to methods.
+#' @return The input object with gene annotations added.
+#' @export
+find_nearest_gene = function(x, ...) {
+  UseMethod("find_nearest_gene")
+}
+
+#' @describeIn find_nearest_gene Find the nearest gene for each variant in a gwas object
+#' @param threshold The distance threshold to consider a gene as nearest. Default is 1e5.
+#' @export
+find_nearest_gene.GWASFormatter = function(x, threshold = 1e5, ...) {
   # Start timing
   start_time <- Sys.time()
   cli::cli_alert_info("Starting gene annotation...")
@@ -115,25 +136,177 @@ find_nearest_gene = function(gwas, threshold = 1e5) {
   cli::cli_progress_step("Updating gwas object with gene annotations\n")
   DBI::dbExecute(con, sql)
 
-  gwas$data = dplyr::tbl(con, "summary_stats_annotated") %>%
+  x$data = dplyr::tbl(con, "summary_stats_annotated") %>%
     dplyr::select(ID, gene_id, gene_name, distance) %>%
-    dplyr::inner_join(gwas$data, by = "ID", copy = TRUE)
+    dplyr::inner_join(x$data, by = "ID", copy = TRUE)
   
   # End timing and report
   end_time <- Sys.time()
   elapsed <- round(difftime(end_time, start_time, units = "secs"), 2)
   cli::cli_alert_success("Gene annotation completed in {elapsed} seconds")
     
-  return(gwas)
+  return(x)
 }
 
-#' Annotate top hits with centromere information
+#' @describeIn find_nearest_gene Find the nearest gene for each variant in a tibble
+#' @param chrom_col Name of the column containing chromosome information. Default is "CHROM".
+#' @param pos_col Name of the column containing position information. Default is "POS".
+#' @param id_col Name of the column containing variant IDs. Default is "ID".
+#' @export
+find_nearest_gene.tbl_df = function(x, threshold = 1e5, chrom_col = "CHROM", pos_col = "POS", id_col = "ID", ...) {
+  # Start timing
+  start_time <- Sys.time()
+  cli::cli_alert_info("Starting gene annotation for tibble...")
+  
+  # Rename columns for consistency
+  renamed_df <- x %>%
+    dplyr::rename(
+      CHROM = !!rlang::sym(chrom_col),
+      POS = !!rlang::sym(pos_col),
+      ID = !!rlang::sym(id_col)
+    )
+
+  other_cols = setdiff(names(renamed_df), c("CHROM", "POS", "ID", "gene_id" , "gene_name", "distance"))
+  
+  # Load and filter human genes data
+  genes_df <- human_genes %>%
+    dplyr::filter(gene_biotype == "protein_coding") %>%
+    dplyr::mutate(
+      expanded_start = start - threshold,
+      expanded_end = end + threshold
+    )
+  
+  nearest_genes <- renamed_df %>%
+    dplyr::nest_by(CHROM, POS, ID, .keep = TRUE) %>%
+    dplyr::reframe({
+      nearby_genes <- genes_df %>%
+        dplyr::filter(
+          chrom == CHROM,
+          expanded_start <= POS,
+          expanded_end >= POS
+        ) %>%
+        dplyr::mutate(
+          distance = dplyr::case_when(
+            POS >= start & POS <= end ~ 0L,
+            POS < start             ~ as.integer(start - POS),
+            TRUE                     ~ as.integer(POS - end)
+          )
+        ) %>%
+        dplyr::arrange(distance)
+      
+      if (nrow(nearby_genes) == 0L) {
+        tibble::tibble(
+          gene_id   = NA_character_,
+          gene_name = NA_character_,
+          distance  = NA_integer_
+        )
+      } else {
+        nearby_genes %>%
+          dplyr::slice(1) %>%
+          dplyr::select(gene_id, gene_name, distance)
+      }
+    })
+  
+  renamed_df = renamed_df %>%
+    dplyr::left_join(
+      nearest_genes,
+      by = c("CHROM", "POS", "ID")
+    ) %>%
+    dplyr::mutate(
+      distance = dplyr::if_else(is.na(distance), NA_integer_, as.integer(distance))
+    )
+  # End timing and report
+  end_time <- Sys.time()
+  elapsed <- round(difftime(end_time, start_time, units = "secs"), 2)
+  cli::cli_alert_success("Gene annotation completed in {elapsed} seconds")
+  
+  return(renamed_df)
+}
+
+#' @export
+find_nearest_gene.data.frame = function(x, threshold = 1e5, chrom_col = "CHROM", pos_col = "POS", id_col = "ID", ...) {
+  find_nearest_gene.tbl_df(x, threshold, chrom_col, pos_col, id_col, ...)
+}
+
+#' Annotate data with centromere information
 #' 
-#' @param top_hits A data frame containing the top hits.
+#' @param x A data frame or tibble containing variant data.
+#' @param ... Additional arguments passed to methods.
 #' @return A data frame with the centromere information.
 #' @export
-annotate_with_centromere = function(top_hits) {
+annotate_with_centromere = function(x, ...) {
+  UseMethod("annotate_with_centromere")
+}
+
+#' @describeIn annotate_with_centromere Annotate a data frame or tibble with centromere information
+#' @param chrom_col Name of the column containing chromosome information. Default is "CHROM".
+#' @param pos_col Name of the column containing position information. Default is "POS".
+#' @export
+annotate_with_centromere.data.frame = function(x, chrom_col = "CHROM", pos_col = "POS", ...) {
+  # Start timing
+  start_time <- Sys.time()
+  cli::cli_progress_step("Starting centromere annotation for data frame...")
+  
+  # Rename columns if needed
+  if (chrom_col != "chrom" || pos_col != "POS") {
+    top_hits <- x %>%
+      dplyr::rename(
+        chrom = !!rlang::sym(chrom_col),
+        POS = !!rlang::sym(pos_col)
+      )
+  } else {
+    top_hits <- x
+  }
+  
+  # Prepare ideogram data with centromere information
+  ideogram_data <- ideogram %>%
+    dplyr::mutate(
+      in_centromere = ifelse(stain == "acen", TRUE, FALSE)
+    )
+  
+  # Perform annotation using dplyr joins
+  cli::cli_progress_step("Finding variants in centromere regions")
+  result <- top_hits %>%
+    # Left join with ideogram to find regions that variants fall into
+    dplyr::left_join(
+      ideogram_data %>% 
+        dplyr::select(chrom, start, end, name, in_centromere),
+      by = dplyr::join_by(chrom, between(POS, start, end))
+    ) %>%
+    dplyr::mutate(
+      in_centromere = dplyr::if_else(is.na(in_centromere), FALSE, in_centromere)
+    )
+  
+  # Restore original column names if they were renamed
+  if (chrom_col != "chrom") {
+    result <- result %>%
+      dplyr::rename(
+        !!rlang::sym(chrom_col) := chrom
+      )
+  }
+  
+  # End timing and report
+  end_time <- Sys.time()
+  elapsed <- round(difftime(end_time, start_time, units = "secs"), 2)
+  cli::cli_alert_success("Centromere annotation completed in {elapsed} seconds")
+  
+  return(result)
+}
+
+#' @describeIn annotate_with_centromere Alias for the data.frame method
+#' @export
+annotate_with_centromere.tbl_df = function(x, ...) {
+  annotate_with_centromere.data.frame(x, ...)
+}
+
+#' @describeIn annotate_with_centromere Centromere annotation method for GWASFormatter objects
+#' @export
+annotate_with_centromere.GWASFormatter = function(x, ...) {
   con = db_connect()
+
+  # Get top hits from the GWAS object
+  top_hits <- x$data %>%
+    dplyr::collect()
 
   dplyr::copy_to(
     con,
@@ -164,7 +337,7 @@ annotate_with_centromere = function(top_hits) {
   (t.chrom = c.chrom) AND (t.POS BETWEEN c.start AND c.end)
   ")
 
-  DBI::dbGetQuery(con, sql) %>%
+  result <- DBI::dbGetQuery(con, sql) %>%
     tibble::as_tibble(.) %>%
     dplyr::mutate(
       in_centromere = dplyr::case_when(
@@ -172,6 +345,13 @@ annotate_with_centromere = function(top_hits) {
         TRUE ~ in_centromere
       )
     )
+  
+  # Update the GWAS object's data with centromere annotations
+  x$data <- result %>%
+    dplyr::copy_to(con, ., name = "summary_stats", temporary = FALSE, overwrite = TRUE) %>%
+    dplyr::tbl(con, .)
+    
+  return(x)
 }
 
 #' Annotate top hits with CHIP gene information
@@ -365,7 +545,7 @@ genesForVariant <- function(variant_id) {
                         "aggregatedScore" = "qtls.aggregatedScore")
 
         if ("qtls.tissues" %in% colnames(result_qtl)) {
-          result_qtl <- result_qtl %>%
+      result_qtl <- result_qtl %>%
             tidyr::unnest(qtls.tissues, names_sep = '_', keep_empty = TRUE ) %>%
             dplyr::rename("tissues_id" = "qtls.tissues_tissue.id",
                           "tissues_name" = "qtls.tissues_tissue.name")
@@ -389,7 +569,7 @@ genesForVariant <- function(variant_id) {
                         "aggregatedScore" = "intervals.aggregatedScore")
 
         if ("intervals.tissues" %in% colnames(result_intervals)) {
-          result_intervals <- result_intervals %>%
+        result_intervals <- result_intervals %>%
             tidyr::unnest(intervals.tissues, names_sep = '_', keep_empty = TRUE) %>%
             dplyr::rename("tissues_id" = "intervals.tissues_tissue.id",
                           "tissues_name" = "intervals.tissues_tissue.name")

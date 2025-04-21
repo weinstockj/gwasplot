@@ -6,7 +6,7 @@
 \usage{
 qqunif_plot(
   pvalues,
-  should.thin = T,
+  should.thin = TRUE,
   thin.obs.places = 2,
   thin.exp.places = 2,
   xlab = expression(paste("Expected (", -log[10], " p-value)")),
@@ -16,10 +16,9 @@ qqunif_plot(
   conf.col = "lightgray",
   conf.alpha = 0.05,
   already.transformed = FALSE,
-  pch = 20,
-  aspect = "iso",
-  prepanel = prepanel.qqunif,
-  par.settings = list(superpose.symbol = list(pch = pch)),
+  point.size = 1.5,
+  point.alpha = 0.7,
+  point.color = "#3366FF",
   ...
 )
 }
