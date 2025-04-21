@@ -198,6 +198,8 @@ GWASFormatter <- R6::R6Class(
         possibly_replace_chr23(self$detected_format) %>%
         add_ID() %>%
         dplyr::compute(temporary = FALSE, overwrite = TRUE, name = "summary_stats")
+
+      DBI::dbExecute(self$con, "ALTER TABLE summary_stats ALTER POS TYPE INTEGER;") # so it's not stored as a double
     },
     kill = function() {
       DBI::dbDisconnect(self$con)
