@@ -1,6 +1,8 @@
 # Overview
 
-**gwasplot** provides fast and efficient tools for visualizing and annotating GWAS summary statistics. It offers functions to reformat data, create plots, and annotate top hits with genomic features. 
+**gwasplot** provides fast and efficient tools for visualizing and annotating GWAS 
+summary statistics. It offers functions to reformat data, create plots, and annotate 
+top hits with genomic features. 
 
 It is designed to work with output from GWAS performed on WGS data with many rare variants, using [duckdb](https://duckdb.org/) to manipulate data. 
 

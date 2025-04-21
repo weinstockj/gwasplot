@@ -26,7 +26,7 @@ standard_format_names_ = function() {
   list(
     "saige" = c("CHR", "POS", "Allele1", "Allele2", "AC_Allele2", "AF_Allele2",
                 "N", "BETA", "SE", "p.value"),
-    "regenie" = c("CHROM", "POS", "ALLELE0", "ALLELE1", "A1FREQ", "BETA", "LOG10P")
+    "regenie" = c("CHROM", "POS", "ALLELE0", "ALLELE1", "A1FREQ", "BETA", "SE", "LOG10P")
   )
 }
 
@@ -79,6 +79,7 @@ reformat_lookup = function() {
       "ALT" = "ALLELE1",
       "AF_ALT" = "A1FREQ",
       "BETA",
+      "SE",
       "LOG10P"
     ),
     saige = c(
@@ -88,17 +89,30 @@ reformat_lookup = function() {
       "ALT" = "Allele2",
       "AF_ALT" = "AF_Allele2",
       "BETA",
+      "SE",
       "PVALUE" = "p.value"
     )
   )
 }
 
+#' Rename columns in the dataset to standard names
+#'
+#' @param ds A data frame or tibble or duckdb tbl containing the GWAS summary statistics.
+#' @param format The format of the input dataset (either "saige" or "regenie").
+#' @return An object of the same class as `ds` with renamed columns.
+#' @export
 reformat_names = function(ds, format) {
+
+  format = match.arg(
+    format,
+    choices = c("saige", "regenie"),
+    several.ok = FALSE
+  )
 
   lookup = reformat_lookup()[[format]]
 
   ds %>%
-    dplyr::select(all_of(lookup))
+    dplyr::select(all_of(lookup), any_of("phenotype"))
 }
 
 possibly_undo_log10p = function(ds, format) {
