@@ -117,7 +117,7 @@ find_nearest_gene = function(gwas, threshold = 1e5) {
 
   gwas$data = dplyr::tbl(con, "summary_stats_annotated") %>%
     dplyr::select(ID, gene_id, gene_name, distance) %>%
-    dplyr::inner_join(gwas$data, by = "ID") 
+    dplyr::inner_join(gwas$data, by = "ID", copy = TRUE)
   
   # End timing and report
   end_time <- Sys.time()
