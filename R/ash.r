@@ -9,7 +9,7 @@
 #' @return A data frame with additional columns for lfsr, qvalue, pm, and psd.
 #' @export
 append_ashr_results <- function(x, ...) {
-    UseMethod("append_lfsr")
+    UseMethod("append_ashr_results")
 }
 
 #' @export
