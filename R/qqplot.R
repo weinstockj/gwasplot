@@ -5,7 +5,7 @@
 #' @param thin.exp.places Number of decimal places to round the expected p-values for thinning. Default is 2.
 #' @export
 qqunif_plot = function(pvalues,
-                       should.thin = T,
+                       should.thin = TRUE,
                        thin.obs.places = 2,
                        thin.exp.places = 2,
                        xlab = expression(paste("Expected (", -log[10], " p-value)")),
@@ -15,13 +15,11 @@ qqunif_plot = function(pvalues,
                        conf.col = "lightgray",
                        conf.alpha = .05,
                        already.transformed = FALSE,
-                       pch = 20,
-                       aspect = "iso",
-                       prepanel = prepanel.qqunif,
-                       par.settings = list(superpose.symbol = list(pch =
-                                                                     pch)),
+                       point.size = 1.5,
+                       point.alpha = 0.7,
+                       point.color = "#3366FF",
                        ...) {
-  #error checking
+  # Error checking
   if (length(pvalues) == 0)
     stop("pvalue vector is empty, can't draw plot")
   if (!(class(pvalues) == "numeric" ||
@@ -38,138 +36,169 @@ qqunif_plot = function(pvalues,
       stop("-log10 pvalue vector contains negative values, can't draw plot")
   }
 
-
+  # Process data
+  plot_data <- NULL
   grp <- NULL
   n <- 1
-  exp.x <- c()
+  
   if (is.list(pvalues)) {
+    # Handle list of p-values (multiple datasets)
     nn <- sapply(pvalues, length)
     rs <- cumsum(nn)
     re <- rs - nn + 1
     n <- min(nn)
+    
     if (!is.null(names(pvalues))) {
       grp = factor(rep(names(pvalues), nn), levels = names(pvalues))
-      names(pvalues) <- NULL
     } else {
       grp = factor(rep(1:length(pvalues), nn))
     }
-    pvo <- pvalues
-    pvalues <- numeric(sum(nn))
-    exp.x <- numeric(sum(nn))
-    for (i in 1:length(pvo)) {
+    
+    # Process each dataset
+    plot_data <- data.frame(
+      observed = numeric(sum(nn)),
+      expected = numeric(sum(nn)),
+      group = grp
+    )
+    
+    for (i in 1:length(pvalues)) {
       if (!already.transformed) {
-        pvalues[rs[i]:re[i]] <- -log10(pvo[[i]])
-        exp.x[rs[i]:re[i]] <- -log10((rank(pvo[[i]], ties.method = "first") -
-                                        .5) / nn[i])
+        plot_data$observed[rs[i]:re[i]] <- -log10(pvalues[[i]])
+        plot_data$expected[rs[i]:re[i]] <- -log10((rank(pvalues[[i]], ties.method = "first") - 0.5) / nn[i])
       } else {
-        pvalues[rs[i]:re[i]] <- pvo[[i]]
-        exp.x[rs[i]:re[i]] <- -log10((nn[i] + 1 - rank(pvo[[i]], ties.method =
-                                                         "first") - .5) / (nn[i] + 1))
+        plot_data$observed[rs[i]:re[i]] <- pvalues[[i]]
+        plot_data$expected[rs[i]:re[i]] <- -log10((nn[i] + 1 - rank(pvalues[[i]], ties.method = "first") - 0.5) / (nn[i] + 1))
       }
     }
   } else {
+    # Handle single vector of p-values
     n <- length(pvalues) + 1
+    
+    plot_data <- data.frame(
+      expected = numeric(length(pvalues)),
+      observed = numeric(length(pvalues))
+    )
+    
     if (!already.transformed) {
-      exp.x <- -log10((rank(pvalues, ties.method = "first") - .5) / n)
-      pvalues <- -log10(pvalues)
+      plot_data$expected <- -log10((rank(pvalues, ties.method = "first") - 0.5) / n)
+      plot_data$observed <- -log10(pvalues)
     } else {
-      exp.x <- -log10((n - rank(pvalues, ties.method = "first") - .5) / n)
+      plot_data$expected <- -log10((n - rank(pvalues, ties.method = "first") - 0.5) / n)
+      plot_data$observed <- pvalues
     }
   }
-
-
-  #this is a helper function to draw the confidence interval
-  panel.qqconf <- function(n,
-                           conf.points = 1000,
-                           conf.col = "gray",
-                           conf.alpha = .05,
-                           ...) {
-    conf.points = min(conf.points, n - 1)
-
-    # mpts <- matrix(nrow = conf.points * 2, ncol = 2)
-    # for (i in seq(from = 1, to = conf.points)) {
-    #   mpts[i, 1] <- -log10((i - .5) / n)
-    #   mpts[i, 2] <- -log10(qbeta(1 - conf.alpha / 2, i, n - i))
-    #   mpts[conf.points * 2 + 1 - i, 1] <- -log10((i - .5) / n)
-    #   mpts[conf.points * 2 + 1 - i, 2] <- -log10(qbeta(conf.alpha / 2, i, n -
-    #                                                      i))
-    # }
-    mpts = qqconf(n, conf.points, conf.alpha)
-
-    grid::grid.polygon(
-      x = mpts[, 1],
-      y = mpts[, 2],
-      gp = grid::gpar(fill = conf.col, lty = 0),
-      default.units = "native"
+  
+  # Thin points if requested
+  if (should.thin) {
+    if (!is.null(grp)) {
+      plot_data <- dplyr::distinct(
+        dplyr::mutate(plot_data,
+          observed = round(observed, thin.obs.places),
+          expected = round(expected, thin.exp.places)
+        )
+      )
+    } else {
+      plot_data <- dplyr::distinct(
+        dplyr::mutate(plot_data,
+          observed = round(observed, thin.obs.places),
+          expected = round(expected, thin.exp.places)
+        )
+      )
+    }
+  }
+  
+  # Calculate confidence intervals if needed
+  if (draw.conf) {
+    conf.points <- min(conf.points, n - 1)
+    conf_data <- qqconf(n, conf.points, conf.alpha)
+    
+    # Convert matrix to data frame for ggplot
+    conf_df <- data.frame(
+      expected = conf_data[,1],
+      observed = conf_data[,2]
     )
   }
-
-  #reduce number of points to plot
-  if (should.thin == T) {
-    if (!is.null(grp)) {
-      thin <- dplyr::distinct(data.frame(
-        pvalues = round(pvalues, thin.obs.places),
-        exp.x = round(exp.x, thin.exp.places),
-        grp = grp
-      ))
-      grp = thin$grp
-    } else {
-      thin <- dplyr::distinct(data.frame(
-        pvalues = round(pvalues, thin.obs.places),
-        exp.x = round(exp.x, thin.exp.places)
-      ))
-    }
-    pvalues <- thin$pvalues
-    exp.x <- thin$exp.x
+  
+  # Create the plot
+  p <- ggplot2::ggplot(plot_data, ggplot2::aes(x = expected, y = observed))
+  
+  # Add confidence interval
+  if (draw.conf) {
+    p <- p + ggplot2::geom_polygon(data = conf_df, 
+                                  ggplot2::aes(x = expected, y = observed), 
+                                  fill = conf.col, 
+                                  alpha = 0.5)
   }
-  gc()
-
-  prepanel.qqunif = function(x, y, ...) {
-    A = list()
-    A$xlim = range(x, y) * 1.02
-    A$xlim[1] = 0
-    A$ylim = A$xlim
-    return(A)
+  
+  # Add points
+  if (!is.null(grp)) {
+    p <- p + ggplot2::geom_point(ggplot2::aes(color = group), 
+                                alpha = point.alpha,
+                                size = point.size)
+  } else {
+    p <- p + ggplot2::geom_point(color = point.color, 
+                                alpha = point.alpha,
+                                size = point.size)
   }
-
-  #draw the plot
-  lattice::xyplot(
-    pvalues ~ exp.x,
-    groups = grp,
-    xlab = xlab,
-    ylab = ylab,
-    aspect = aspect,
-    prepanel = prepanel,
-    scales = list(axs = "i"),
-    pch = pch,
-    panel = function(x, y, ...) {
-      if (draw.conf) {
-        panel.qqconf(
-          n,
-          conf.points = conf.points,
-          conf.col = conf.col,
-          conf.alpha = conf.alpha
-        )
-      }
-
-      lattice::panel.xyplot(x, y, ...)
-
-      lattice::panel.abline(0, 1)
-
-    },
-    par.settings = par.settings,
-    ...
-  )
-
+  
+  # Add diagonal line
+  p <- p + ggplot2::geom_abline(slope = 1, intercept = 0, 
+                              color = "darkgray", 
+                              linetype = "dashed")
+  
+  # Adjust theme and appearance
+  p <- p + ggplot2::theme_bw(base_size = 12, base_family = "Helvetica") +
+    ggplot2::coord_equal() +
+    ggplot2::labs(x = xlab, y = ylab) +
+    ggplot2::theme(
+      panel.grid.minor = ggplot2::element_blank(),
+      panel.grid.major = ggplot2::element_line(color = "lightgray", linetype = "dotted"),
+      panel.border = ggplot2::element_rect(color = "black", fill = NA),
+      axis.line = ggplot2::element_line(color = "black"),
+      axis.text = ggplot2::element_text(color = "black"),
+      axis.ticks = ggplot2::element_line(color = "black"),
+      legend.position = if (is.null(grp)) "none" else "right"
+    )
+  
+  # Return the plot
+  return(p)
 }
 
-qqunif_plot_save = function(gwas, output_prefix) {
-  fname = glue("{output_prefix}_qqplot.png")
-  ragg::agg_png(file = fname,
-      width = 5,
-      height = 5, units = "in")
-  # png(file = fname, type = "cairo")
-  # lattice::trellis.device(file = fname)
-  print(qqunif_plot(dplyr::pull(compute_sample(gwas, 1e7), PVALUE)))
-  dev.off()
+#' Save a QQ plot of GWAS p-values
+#' 
+#' @param gwas A gwas object containing the p-values to plot.
+#' @param output_prefix The prefix for the output file name.
+#' @param width Width of the output figure in inches.
+#' @param height Height of the output figure in inches.
+#' @param dpi DPI of the output figure.
+#' @return NULL
+#' @export
+qqunif_plot_save = function(gwas, output_prefix, width = 5, height = 5, dpi = 300) {
+  log_info("Creating QQ plot")
+  fname <- glue::glue("{output_prefix}_qqplot.png")
+  
+  # Sample data to avoid memory issues with large datasets
+  con <- db_connect() 
+  tbl = dplyr::tbl(con, "summary_stats")
+  
+  p_values <- dplyr::pull(tbl, PVALUE) %>%
+    dplyr::collect(.)
+  
+  # Create and save the plot
+  p <- qqunif_plot(p_values)
+  
+  ggplot2::ggsave(
+    filename = fname,
+    plot = p,
+    device = ragg::agg_png,
+    width = width,
+    height = height,
+    units = "in",
+    dpi = dpi,
+    bg = "white"
+  )
+  
+  log_info(glue::glue("QQ plot saved to {fname}"))
+  
+  return(invisible(NULL))
 }

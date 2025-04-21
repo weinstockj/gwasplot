@@ -1,5 +1,3 @@
-
-
 #' Reformat GWAS summary statistics from regenie or SAIGE
 #'
 #' This function takes a file path to a parquet or CSV file of GWAS summary statistics
@@ -161,13 +159,33 @@ GWASFormatter <- R6::R6Class(
       } else {
           if (file_ext == "parquet") {
             tryCatch({
-              self$data = tbl(self$con, glue("read_parquet('{file_path}')"))
+              # Read parquet file with optimized column types
+              self$data = tbl(self$con, glue("
+                SELECT 
+                  CAST(CASE 
+                    WHEN CHROM LIKE 'chr%' THEN CHROM 
+                    ELSE CONCAT('chr', CHROM) 
+                  END AS VARCHAR) AS CHROM,
+                  CAST(POS AS INTEGER) AS POS,
+                  * EXCLUDE(CHROM, POS)
+                FROM read_parquet('{file_path}')
+              "))
             }, error = function(e) {
               stop(paste("Error reading parquet file:", e$message))
             })
         } else if (file_ext == "csv") {
             tryCatch({
-              self$data = tbl(self$con, glue("read_csv('{file_path}')"))
+              # Read CSV file with optimized column types
+              self$data = tbl(self$con, glue("
+                SELECT 
+                  CAST(CASE 
+                    WHEN CHROM LIKE 'chr%' THEN CHROM 
+                    ELSE CONCAT('chr', CHROM) 
+                  END AS VARCHAR) AS CHROM,
+                  CAST(POS AS INTEGER) AS POS,
+                  * EXCLUDE(CHROM, POS)
+                FROM read_csv('{file_path}')
+              "))
             }, error = function(e) {
               stop(paste("Error reading CSV file:", e$message))
             })

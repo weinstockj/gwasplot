@@ -9,11 +9,7 @@ annotate_top_hits = function(gwas, threshold = 5e-8) {
     dplyr::filter(PVALUE < threshold) %>%
     dplyr::collect(.)
 
-  # possibly_query = purrr::possibly(
-  #   query_ot_api_variants,
-  #   otherwise = NULL,
-  #   quiet = TRUE
-  # )
+
   # ot = purrr::map(df$ID, ~possibly_query(stringr::str_remove(.x, "chr"))) %>%
   #   purrr::compact(.) %>%
   #   dplyr::bind_rows(.) %>%
@@ -32,19 +28,17 @@ annotate_top_hits = function(gwas, threshold = 5e-8) {
 #' @param threshold The distance threshold to consider a gene as nearest. Default is 1e5.
 #' @return A data frame with the nearest gene information.
 #' @export
-find_nearest_gene = function(top_hits, threshold = 1e5) {
-
+find_nearest_gene = function(gwas, threshold = 1e5) {
+  # Start timing
+  start_time <- Sys.time()
+  cli::cli_alert_info("Starting gene annotation...")
+  
   con = db_connect()
 
+  DBI::dbExecute(con, "PRAGMA max_temp_directory_size = '30GB'")
 
-  dplyr::copy_to(
-    con,
-    top_hits,
-    name = "top_hits",
-    temporary = FALSE,
-    overwrite = TRUE
-  )
-
+  # Load human genes data
+  cli::cli_progress_step("Loading gene reference data")
   dplyr::copy_to(
     con,
     human_genes,
@@ -52,47 +46,85 @@ find_nearest_gene = function(top_hits, threshold = 1e5) {
     temporary = FALSE,
     overwrite = TRUE
   )
-
-  sql = glue("
-  WITH VariantCross AS (
-      SELECT
-       t.*,
-       LEAST(ABS(t.pos - g.start), ABS(t.pos - g.end)) AS distance,
-       g.gene_name,
-       g.gene_id
-      FROM top_hits t
-      CROSS JOIN human_genes g
-      WHERE t.chrom = g.chrom
-      AND g.gene_biotype = 'protein_coding'
-  ),
-  VariantCrossRanked AS (
-      SELECT *,
-      ROW_NUMBER() OVER (PARTITION BY ID ORDER BY distance) AS rn
-      FROM VariantCross
-  )
-  SELECT
-    *
-  FROM VariantCrossRanked
-  WHERE rn = 1
+  
+  # Create spatial index for genes
+  cli::cli_progress_step("Creating optimized gene intervals\n")
+  sql_index = glue("
+  SELECT 
+    gene_id, 
+    gene_name,
+    gene_biotype,
+    chrom,
+    start - {format(threshold, scientific = FALSE)} AS expanded_start,
+    g.\"end\" + {format(threshold, scientific = FALSE)} AS expanded_end,
+    start,
+    g.\"end\"
+  FROM human_genes g
+  WHERE gene_biotype = 'protein_coding'
   ")
 
-  DBI::dbGetQuery(con, sql) %>%
-    tibble::as_tibble(.) %>%
-    dplyr::mutate(
-      gene_id = dplyr::case_when(
-        distance > threshold ~ NA_character_,
-        TRUE ~ gene_id
-      ),
-      gene_name = dplyr::case_when(
-        distance > threshold ~ NA_character_,
-        TRUE ~ gene_name
-      ),
-      distance = dplyr::case_when(
-        distance > threshold ~ NA_real_,
-        TRUE ~ distance
-      )
-    ) %>%
-    dplyr::select(-rn)
+  intervals = dplyr::tbl(con, dplyr::sql(sql_index)) %>%
+    dplyr::compute(temporary = FALSE, overwrite = TRUE, name = "gene_intervals")
+
+  DBI::dbExecute(
+    con,
+    "CREATE INDEX IF NOT EXISTS chrom_start_end ON gene_intervals (chrom, expanded_start, expanded_end)"
+  )
+  DBI::dbExecute(con, "CREATE INDEX IF NOT EXISTS chrom_pos ON summary_stats (chrom, POS)")
+  
+  cli::cli_progress_step("Finding nearest genes")
+  sql = "
+  CREATE OR REPLACE TABLE summary_stats_annotated AS
+  WITH NearestGenes AS (
+    SELECT
+      t.*,
+      g.gene_id,
+      g.gene_name,
+      CASE
+        -- Variant inside gene
+        WHEN t.POS >= g.start AND t.POS <= g.end THEN 0
+        -- Variant upstream of gene
+        WHEN t.POS < g.start THEN g.start - t.POS
+        -- Variant downstream of gene
+        ELSE t.POS - g.end
+      END AS distance  
+    FROM summary_stats t
+    -- Efficient range join instead of cross join
+    JOIN gene_intervals g ON 
+      t.chrom = g.chrom AND 
+      t.POS >= g.expanded_start AND 
+      t.POS <= g.expanded_end
+  ),
+  RankedGenes AS (
+    SELECT 
+      *,
+      ROW_NUMBER() OVER (PARTITION BY ID ORDER BY distance) AS rn
+    FROM NearestGenes
+  )
+  SELECT
+    CHROM,
+    POS,
+    ID,
+    gene_id,
+    gene_name,
+    distance
+  FROM RankedGenes
+  WHERE rn = 1
+  "
+
+  cli::cli_progress_step("Updating gwas object with gene annotations\n")
+  DBI::dbExecute(con, sql)
+
+  gwas$data = dplyr::tbl(con, "summary_stats_annotated") %>%
+    dplyr::select(ID, gene_id, gene_name, gene_biotype, distance) %>%
+    dplyr::inner_join(gwas$data, by = "ID") 
+  
+  # End timing and report
+  end_time <- Sys.time()
+  elapsed <- round(difftime(end_time, start_time, units = "secs"), 2)
+  cli::cli_alert_success("Gene annotation completed in {elapsed} seconds")
+    
+  return(gwas)
 }
 
 #' Annotate top hits with centromere information
