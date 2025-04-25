@@ -3,7 +3,7 @@
 #' @return A DuckDB connection object.
 #' @export 
 db_connect = function(read_only = FALSE) {
-  con = DBI::dbConnect(duckdb::duckdb(), dbdir = "local.duckdb", read_only = FALSE)
+  con = DBI::dbConnect(duckdb::duckdb(), dbdir = "local.duckdb", read_only = read_only)
 
   limit = getOption("duckdb_max_memory")
 

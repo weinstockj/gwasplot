@@ -304,18 +304,6 @@ annotate_with_centromere.tbl_df = function(x, ...) {
 annotate_with_centromere.GWASFormatter = function(x, ...) {
   con = db_connect()
 
-  # Get top hits from the GWAS object
-  top_hits <- x$data %>%
-    dplyr::collect()
-
-  dplyr::copy_to(
-    con,
-    top_hits,
-    name = "top_hits",
-    temporary = FALSE,
-    overwrite = TRUE
-  )
-
   dplyr::copy_to(
     con,
     ideogram %>%
@@ -327,30 +315,22 @@ annotate_with_centromere.GWASFormatter = function(x, ...) {
     overwrite = TRUE
   )
 
-  sql = glue("
-  SELECT
-    t.*,
-    c.name as ideogram_name,
-    c.in_centromere
-  FROM top_hits t
-  LEFT JOIN ideogram c ON
-  (t.chrom = c.chrom) AND (t.POS BETWEEN c.start AND c.end)
-  ")
+  cen_tbl = dplyr::tbl(con, "ideogram")
 
-  result <- DBI::dbGetQuery(con, sql) %>%
-    tibble::as_tibble(.) %>%
+
+ x$data = x$data %>%
+    dplyr::left_join(
+      cen_tbl %>%
+        dplyr::select(chrom, start, end, in_centromere),
+      by = dplyr::join_by(chrom, dplyr::between(POS, start, end))
+    ) %>%  
     dplyr::mutate(
       in_centromere = dplyr::case_when(
         is.na(in_centromere) ~ FALSE,
         TRUE ~ in_centromere
       )
     )
-  
-  # Update the GWAS object's data with centromere annotations
-  x$data <- result %>%
-    dplyr::copy_to(con, ., name = "summary_stats", temporary = FALSE, overwrite = TRUE) %>%
-    dplyr::tbl(con, .)
-    
+
   return(x)
 }
 
@@ -408,6 +388,50 @@ annotate_with_chip_genes = function(top_hits) {
         TRUE ~ is_chip_gene
       )
     )
+}
+
+#' Annotate data with immunoglobulin gene information
+#' 
+#' @param x A data frame/tibble or GWASFormatter object containing variant data.
+#' @param ... Additional arguments passed to methods.
+#' 
+#' @export
+annotate_with_immunoglobulin = function(x, ...) {
+  UseMethod("annotate_with_immunoglobulin")
+}
+
+#' @export
+annotate_with_immunoglobulin.data.frame = function(x, ...) {
+
+  result = x %>%
+    dplyr::mutate(
+      is_IGHV = ifelse(chrom == "chr14" & POS >= 105586437 & POS <= 106879844, TRUE, FALSE),
+      is_IGLV = ifelse(chrom == "chr22" & POS >= 22026076 & POS <= 22922913, TRUE, FALSE),
+    )
+    
+
+  return(result)
+}
+
+#' @export
+annotate_with_immunoglobulin.tbl_df = function(x, ...) {
+  annotate_with_immunoglobulin.data.frame(x, ...)
+}
+
+#' @export
+annotate_with_immunoglobulin.GWASFormatter = function(x, ...) {
+  
+  con = db_connect()
+
+  x$data = x$data %>%
+    dplyr::mutate(
+      is_IGHV = ifelse(chrom == "chr14" & POS >= 105586437 & POS <= 106879844, TRUE, FALSE),
+      is_IGLV = ifelse(chrom == "chr22" & POS >= 22026076 & POS <= 22922913, TRUE, FALSE)
+    ) %>%
+    dplyr::compute(temporary = FALSE, overwrite = TRUE, name = "summary_stats")
+
+
+  return(x)
 }
 
 query_ot_api_v2g = function(variant_id = "19_44908822_C_T", pageindex = 0, pagesize = 20) {
