@@ -43,3 +43,6 @@ chip_genes = c("ASXL1", "ASXL2", "BCOR", "BCORL1", "BRAF", "BRCC3", "CBL", "CBLB
                  "U2AF1", "U2AF2", "WT1", "ZRSR2", "ZBTB33", "YLPM1", "SRCAP", "ZNF318")
 
 usethis::use_data(chip_genes, overwrite = TRUE)
+
+# download https://github.com/PheWAS/PheWAS/blob/master/data/pheinfo.rda
+usethis::use_data(pheinfo, overwrite = TRUE)
