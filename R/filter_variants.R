@@ -21,15 +21,15 @@ filter_variants.GWASFormatter = function(x, subset = NULL, exclude = NULL, ...) 
 
         whitelist = dplyr::tbl(x$con, glue::glue("read_parquet('{subset}')"))
 
-        x$data = dplyr::semi_join(x$data, whitelist, by = c("chrom", "pos", "ref", "alt"))
+        x$data = dplyr::semi_join(x$data, whitelist, by = c("chrom", "pos", "ref", "alt")) %>%
             dplyr::compute(name = "filtered_variants", temporary = FALSE, overwrite = TRUE)
     }
 
     if(!is.null(exclude)) {
-        
+
         blacklist = dplyr::tbl(x$con, glue::glue("read_parquet('{exclude}')"))
 
-        x$data = dplyr::anti_join(x$data, blacklist, by = c("chrom", "pos", "ref", "alt"))
+        x$data = dplyr::anti_join(x$data, blacklist, by = c("chrom", "pos", "ref", "alt")) %>%
             dplyr::compute(name = "filtered_variants", temporary = FALSE, overwrite = TRUE)
     }
 
