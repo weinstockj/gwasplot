@@ -50,10 +50,6 @@ exclude_difficult_regions = function(x, ...) {
     UseMethod("exclude_difficult_regions")
 }
 
-#' @title Exclude difficult regions
-#' @param beds_exclude A character vector of bed files to exclude. Options are "hg19diff", "UCSC_unusual", "GRC_exclusions", and "GIAB_difficult_regions".
-#' @param active_table The name of the active table to exclude difficult regions from. Options are "filtered_variants" and "summary_stats".
-#' 
 #' @export
 exclude_difficult_regions.GWASFormatter = function(x, beds_exclude = c("hg19diff", "UCSC_unusual", "GRC_exclusions"), active_table = "filtered_variants",  ...) {
   start_time <- Sys.time()

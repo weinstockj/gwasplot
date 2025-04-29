@@ -15,13 +15,13 @@ License: GPL (>= 3)
 Encoding: UTF-8
 LazyData: true
 Imports: 
-    cli,
+    cli (>= 3.6.3),
     cowplot,
     DBI,
     dbplyr,
-    dplyr,
-    duckdb,
-    ggplot2,
+    dplyr (>= 1.1.4),
+    duckdb (>= 1.2.1),
+    ggplot2 (>= 3.4.0),
     ghql,
     glue,
     httr2,
