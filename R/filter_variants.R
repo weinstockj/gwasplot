@@ -112,3 +112,8 @@ exclude_difficult_regions.data.frame = function(x, beds_exclude = c("hg19diff", 
   return(x)
 }
 
+#' @export
+exclude_difficult_regions.tbl_df = function(x, ...) {
+    exclude_difficult_regions.data.frame(x, ...)
+}
+
