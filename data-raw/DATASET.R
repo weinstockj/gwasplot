@@ -46,3 +46,67 @@ usethis::use_data(chip_genes, overwrite = TRUE)
 
 # download https://github.com/PheWAS/PheWAS/blob/master/data/pheinfo.rda
 usethis::use_data(pheinfo, overwrite = TRUE)
+
+# download hg19diff 
+hg19diff = vroom::vroom(
+            "C:/Users/jwein22/Downloads/hg19diff.tsv.gz",
+            delim = "\t",
+            col_names = c("bin", "chrom", "start", "end", "name", "score", "strand", "thickStart", "thickEnd", "itemRgb"),
+            skip = 1
+        ) %>%
+        dplyr::filter(score < 1000) %>% # score 1000 contigs are not so bad
+        dplyr::select(
+                chrom,
+                start,
+                end
+        ) 
+
+usethis::use_data(hg19diff, overwrite = TRUE)
+
+UCSC_unusual = vroom::vroom(
+            "C:/Users/jwein22/Downloads/UCSC_unusual_regions.tsv.gz", 
+            delim = "\t",
+            col_names = c("chrom", "start", "end", "name", "score", "strand", "thickStart", "thickEnd", "itemRgb", "note", "otherLoc"),
+            skip = 1
+        ) %>%
+        dplyr::select(
+            chrom,
+            start,
+            end
+        )
+
+usethis::use_data(UCSC_unusual, overwrite = TRUE)
+
+GRC_exclusions = vroom::vroom(
+            "C:/Users/jwein22/Downloads/GRC_exclusions.tsv.gz", 
+            delim = "\t",
+            col_names = c("chrom", "start", "end", "name", "score", "strand", "thickStart", "thickEnd", "itemRgb", "note", "otherLoc"),
+            skip = 1
+        ) %>%
+        dplyr::select(
+            chrom,
+            start,
+            end
+        )
+
+usethis::use_data(GRC_exclusions, overwrite = TRUE)
+
+GIAB_difficult_regions = vroom::vroom(
+            "C:/Users/jwein22/Downloads/GIAB_difficult_regions.tsv.gz", 
+            delim = "\t",
+            col_names = c("chrom", "start", "end", "name", "score", "strand", "thickStart", "thickEnd", "itemRgb", "note", "otherLoc"),
+            skip = 1
+        ) %>%
+        dplyr::select(
+            chrom,
+            start,
+            end
+        )
+
+usethis::use_data(GIAB_difficult_regions, overwrite = TRUE)
+
+# download from here: https://github.com/PheWAS/PheWAS/blob/master/data/pheinfo.rda
+load("pheinfo.rda")
+
+pheinfo = tibble::as_tibble(pheinfo)
+usethis::use_data(pheinfo, overwrite = TRUE)
