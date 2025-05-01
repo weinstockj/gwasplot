@@ -112,7 +112,7 @@ reformat_names = function(ds, format) {
   lookup = reformat_lookup()[[format]]
 
   ds %>%
-    dplyr::select(all_of(lookup), any_of("phenotype"))
+    dplyr::select(all_of(lookup), any_of("phenotype"), any_of("filename"))
 }
 
 possibly_undo_log10p = function(ds, format) {
