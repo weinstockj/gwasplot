@@ -38,7 +38,19 @@
 
     <div class="section level2">
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">manhattan</span><span class="op">(</span><span class="va">gwas</span>, <span class="va">output</span>, lower_logp_threshold <span class="op">=</span> <span class="fl">3</span>, <span class="va">...</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">manhattan</span><span class="op">(</span></span>
+<span>  <span class="va">gwas</span>,</span>
+<span>  <span class="va">output</span>,</span>
+<span>  lower_logp_threshold <span class="op">=</span> <span class="fl">3</span>,</span>
+<span>  label_top_n <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  label_strategy <span class="op">=</span> <span class="st">"lead_per_locus"</span>,</span>
+<span>  label_locus_window_kb <span class="op">=</span> <span class="fl">500</span>,</span>
+<span>  italic_gene_labels <span class="op">=</span> <span class="cn">TRUE</span>,</span>
+<span>  highlight_genes <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  highlight_color <span class="op">=</span> <span class="st">"red3"</span>,</span>
+<span>  label_color <span class="op">=</span> <span class="st">"black"</span>,</span>
+<span>  <span class="va">...</span></span>
+<span><span class="op">)</span></span></code></pre></div>
     </div>
 
     <div class="section level2">
@@ -55,6 +67,40 @@
 
 <dt id="arg-lower-logp-threshold">lower_logp_threshold<a class="anchor" aria-label="anchor" href="#arg-lower-logp-threshold"></a></dt>
 <dd><p>The lower threshold for the -log10(p-value) to plot. Default is 3.0.</p></dd>
+
+
+<dt id="arg-label-top-n">label_top_n<a class="anchor" aria-label="anchor" href="#arg-label-top-n"></a></dt>
+<dd><p>Integer. If set and a `gene_name` column is present, annotate the
+top N variants (by p-value) with labels using ggrepel. If `gene_name` is missing,
+labels fall back to cytoband-like text (e.g., `chr4p16.3`). Default is NULL (no labels).</p></dd>
+
+
+<dt id="arg-label-strategy">label_strategy<a class="anchor" aria-label="anchor" href="#arg-label-strategy"></a></dt>
+<dd><p>Label selection mode: `"top_n"` (global top N by p-value)
+or `"lead_per_locus"` (one lead per locus, then top N). Default `"lead_per_locus"`.</p></dd>
+
+
+<dt id="arg-label-locus-window-kb">label_locus_window_kb<a class="anchor" aria-label="anchor" href="#arg-label-locus-window-kb"></a></dt>
+<dd><p>Locus window size in kilobases used when
+`label_strategy = "lead_per_locus"`. Default 500.</p></dd>
+
+
+<dt id="arg-italic-gene-labels">italic_gene_labels<a class="anchor" aria-label="anchor" href="#arg-italic-gene-labels"></a></dt>
+<dd><p>Logical. If TRUE, gene labels are italicized; cytoband
+fallback labels remain plain text. Default TRUE.</p></dd>
+
+
+<dt id="arg-highlight-genes">highlight_genes<a class="anchor" aria-label="anchor" href="#arg-highlight-genes"></a></dt>
+<dd><p>Optional character vector of gene symbols to highlight
+(e.g., novel genes). Matching labels are colored with `highlight_color`.</p></dd>
+
+
+<dt id="arg-highlight-color">highlight_color<a class="anchor" aria-label="anchor" href="#arg-highlight-color"></a></dt>
+<dd><p>Color for highlighted labels. Default `"red3"`.</p></dd>
+
+
+<dt id="arg-label-color">label_color<a class="anchor" aria-label="anchor" href="#arg-label-color"></a></dt>
+<dd><p>Color for non-highlighted labels. Default `"black"`.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>

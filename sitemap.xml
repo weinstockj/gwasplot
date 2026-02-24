@@ -8,6 +8,7 @@
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/annotate_with_chip_genes.GWASFormatter.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/annotate_with_chip_genes.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/annotate_with_immunoglobulin.html</loc></url>
+<url><loc>https://weinstocklab.github.io/gwasplot/reference/annotate_with_l2g.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/append_ashr_results.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/assign_gene_tracks.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/compute_sample.html</loc></url>
@@ -20,13 +21,14 @@
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/get_biosample_for_accession.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/get_encode_biosamples.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/gwasplot-package.html</loc></url>
+<url><loc>https://weinstocklab.github.io/gwasplot/reference/identify_loci.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/index.html</loc></url>
+<url><loc>https://weinstocklab.github.io/gwasplot/reference/lambda_gc.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/locuszoom.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/manhattan.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/parse_variants_for_output.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/pipe.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/qqplot.html</loc></url>
-<url><loc>https://weinstocklab.github.io/gwasplot/reference/qqplot_save.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/query_encode_ccres.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/query_ot_api_v2g.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/query_ot_api_variants.html</loc></url>
