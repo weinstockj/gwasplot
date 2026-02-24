@@ -2,7 +2,8 @@
 # Global variables to avoid NSE warnings in R CMD check
 utils::globalVariables(c(
   "CHROM", "POS", "PVALUE", "CHROM_index", "chr_len", "tot", "POScum",
-  "center", "aes", "gene_name", "locus_id", "is_lead"
+  "center", "aes", "gene_name", "locus_id", "is_lead", "label_text",
+  "label_expr", "label_is_gene", "label_is_highlight"
 ))
 
 # Helper function to create chromosome lookup table
@@ -55,9 +56,110 @@ calculate_axis_positions = function(prepared_data) {
   return(axis)
 }
 
+# Build cytoband-like labels (e.g., "chr4p16.3") for fallback labeling.
+derive_cytoband_labels = function(df) {
+  if (!exists("ideogram", inherits = TRUE)) {
+    return(rep(NA_character_, nrow(df)))
+  }
+
+  bands <- ideogram %>%
+    dplyr::select(chrom, start, end, name)
+
+  joined <- df %>%
+    dplyr::mutate(.row_id = dplyr::row_number()) %>%
+    dplyr::left_join(
+      bands,
+      by = dplyr::join_by(CHROM == chrom, dplyr::between(POS, start, end))
+    ) %>%
+    dplyr::group_by(.row_id) %>%
+    dplyr::summarise(
+      band_name = dplyr::first(stats::na.omit(name)),
+      .groups = "drop"
+    ) %>%
+    dplyr::right_join(
+      df %>% dplyr::mutate(.row_id = dplyr::row_number()),
+      by = ".row_id"
+    ) %>%
+    dplyr::arrange(.row_id)
+
+  ifelse(
+    is.na(joined$band_name),
+    joined$CHROM,
+    paste0(joined$CHROM, joined$band_name)
+  )
+}
+
+# Escape text for plotmath and optionally return an italicized expression string.
+as_plotmath_label = function(text, italic = FALSE) {
+  escaped <- gsub("\\\\", "\\\\\\\\", text)
+  escaped <- gsub("'", "\\\\'", escaped)
+  if (italic) {
+    paste0("italic('", escaped, "')")
+  } else {
+    paste0("'", escaped, "'")
+  }
+}
+
+# Select points to label and build label text/expression metadata.
+select_label_points = function(prepared_data, label_top_n, label_strategy = c("top_n", "lead_per_locus"),
+                               label_locus_window_kb = 500, highlight_genes = NULL,
+                               italic_gene_labels = TRUE) {
+  if (is.null(label_top_n) || label_top_n <= 0) {
+    return(NULL)
+  }
+
+  label_strategy <- match.arg(label_strategy)
+
+  candidates <- prepared_data %>%
+    dplyr::arrange(PVALUE)
+
+  if (label_strategy == "lead_per_locus" && nrow(candidates) > 0) {
+    candidates <- identify_loci.data.frame(
+      candidates,
+      window_kb = label_locus_window_kb,
+      pvalue_threshold = Inf
+    ) %>%
+      dplyr::filter(is_lead)
+  }
+
+  label_df <- candidates %>%
+    dplyr::slice_min(PVALUE, n = label_top_n, with_ties = FALSE)
+
+  if (nrow(label_df) == 0) {
+    return(NULL)
+  }
+
+  has_gene <- "gene_name" %in% names(label_df)
+  gene_vals <- if (has_gene) label_df$gene_name else rep(NA_character_, nrow(label_df))
+  band_vals <- derive_cytoband_labels(label_df)
+
+  label_df <- label_df %>%
+    dplyr::mutate(
+      label_is_gene = !is.na(gene_vals) & gene_vals != "",
+      label_text = ifelse(label_is_gene, gene_vals, band_vals),
+      label_text = ifelse(is.na(label_text) | label_text == "", CHROM, label_text),
+      label_is_highlight = label_is_gene & !is.null(highlight_genes) & gene_vals %in% highlight_genes,
+      label_expr = ifelse(
+        label_is_gene & italic_gene_labels,
+        vapply(label_text, as_plotmath_label, FUN.VALUE = character(1), italic = TRUE),
+        vapply(label_text, as_plotmath_label, FUN.VALUE = character(1), italic = FALSE)
+      )
+    )
+
+  label_df
+}
+
 # Helper function to create the Manhattan plot
 create_manhattan_plot = function(prepared_data, axis_data, pvalue_threshold = 5e-8,
-                                 y_max_cap = 300, label_top_n = NULL) {
+                                 y_max_cap = 300, label_top_n = NULL,
+                                 label_strategy = c("top_n", "lead_per_locus"),
+                                 label_locus_window_kb = 500,
+                                 italic_gene_labels = TRUE,
+                                 highlight_genes = NULL,
+                                 highlight_color = "red3",
+                                 label_color = "black") {
+  label_strategy <- match.arg(label_strategy)
+
   p = ggplot2::ggplot(prepared_data, aes(x=POScum, y=-log10(PVALUE))) +
     # Show all points
     ggrastr::rasterise(
@@ -92,20 +194,49 @@ create_manhattan_plot = function(prepared_data, axis_data, pvalue_threshold = 5e
       axis.line.y = element_line(size = .6)
     )
 
-  # Add gene labels if requested and gene_name column exists
-  if (!is.null(label_top_n) && "gene_name" %in% names(prepared_data)) {
+  # Add labels for top points using gene_name when available; otherwise cytoband.
+  if (!is.null(label_top_n)) {
     if (requireNamespace("ggrepel", quietly = TRUE)) {
-      label_df <- prepared_data %>%
-        dplyr::filter(!is.na(gene_name)) %>%
-        dplyr::slice_min(PVALUE, n = label_top_n, with_ties = FALSE)
-
-      p <- p + ggrepel::geom_text_repel(
-        data = label_df,
-        ggplot2::aes(x = POScum, y = -log10(PVALUE), label = gene_name),
-        size = 3, max.overlaps = Inf, seed = 42
+      label_df <- select_label_points(
+        prepared_data = prepared_data,
+        label_top_n = label_top_n,
+        label_strategy = label_strategy,
+        label_locus_window_kb = label_locus_window_kb,
+        highlight_genes = highlight_genes,
+        italic_gene_labels = italic_gene_labels
       )
+
+      if (!is.null(label_df) && nrow(label_df) > 0) {
+        common_repel_args <- list(
+          mapping = ggplot2::aes(x = POScum, y = -log10(PVALUE), label = label_expr),
+          parse = TRUE,
+          size = 3,
+          max.overlaps = Inf,
+          seed = 42,
+          segment.size = 0.25,
+          segment.alpha = 0.65,
+          segment.color = "grey35",
+          min.segment.length = 0
+        )
+
+        normal_df <- label_df %>% dplyr::filter(!label_is_highlight)
+        highlight_df <- label_df %>% dplyr::filter(label_is_highlight)
+
+        if (nrow(normal_df) > 0) {
+          p <- p + do.call(
+            ggrepel::geom_text_repel,
+            c(list(data = normal_df, colour = label_color, inherit.aes = FALSE), common_repel_args)
+          )
+        }
+        if (nrow(highlight_df) > 0) {
+          p <- p + do.call(
+            ggrepel::geom_text_repel,
+            c(list(data = highlight_df, colour = highlight_color, fontface = "bold", inherit.aes = FALSE), common_repel_args)
+          )
+        }
+      }
     } else {
-      cli::cli_warn("Install the {.pkg ggrepel} package to enable gene labels.")
+      cli::cli_warn("Install the {.pkg ggrepel} package to enable Manhattan labels.")
     }
   }
 
@@ -132,21 +263,51 @@ save_manhattan_plot = function(plot, output, ...) {
 #' @param output The output file name.
 #' @param lower_logp_threshold The lower threshold for the -log10(p-value) to plot. Default is 3.0.
 #' @param label_top_n Integer. If set and a `gene_name` column is present, annotate the
-#'   top N variants (by p-value) with gene labels using ggrepel. Default is NULL (no labels).
+#'   top N variants (by p-value) with labels using ggrepel. If `gene_name` is missing,
+#'   labels fall back to cytoband-like text (e.g., `chr4p16.3`). Default is NULL (no labels).
+#' @param label_strategy Label selection mode: `"top_n"` (global top N by p-value)
+#'   or `"lead_per_locus"` (one lead per locus, then top N). Default `"lead_per_locus"`.
+#' @param label_locus_window_kb Locus window size in kilobases used when
+#'   `label_strategy = "lead_per_locus"`. Default 500.
+#' @param italic_gene_labels Logical. If TRUE, gene labels are italicized; cytoband
+#'   fallback labels remain plain text. Default TRUE.
+#' @param highlight_genes Optional character vector of gene symbols to highlight
+#'   (e.g., novel genes). Matching labels are colored with `highlight_color`.
+#' @param highlight_color Color for highlighted labels. Default `"red3"`.
+#' @param label_color Color for non-highlighted labels. Default `"black"`.
 #' @param ... Additional arguments passed to `ggsave`.
 #' @return NULL
 #' @export
-manhattan = function(gwas, output, lower_logp_threshold = 3.0, label_top_n = NULL, ...) {
+manhattan = function(gwas, output, lower_logp_threshold = 3.0, label_top_n = NULL,
+                     label_strategy = "lead_per_locus", label_locus_window_kb = 500,
+                     italic_gene_labels = TRUE, highlight_genes = NULL,
+                     highlight_color = "red3", label_color = "black", ...) {
   UseMethod("manhattan")
 }
 
 #' @export
-manhattan.tbl_df = function(gwas, output, lower_logp_threshold = 3.0, label_top_n = NULL, ...) {
-  manhattan.data.frame(gwas, output, lower_logp_threshold, label_top_n = label_top_n, ...)
+manhattan.tbl_df = function(gwas, output, lower_logp_threshold = 3.0, label_top_n = NULL,
+                            label_strategy = "lead_per_locus", label_locus_window_kb = 500,
+                            italic_gene_labels = TRUE, highlight_genes = NULL,
+                            highlight_color = "red3", label_color = "black", ...) {
+  manhattan.data.frame(
+    gwas, output, lower_logp_threshold,
+    label_top_n = label_top_n,
+    label_strategy = label_strategy,
+    label_locus_window_kb = label_locus_window_kb,
+    italic_gene_labels = italic_gene_labels,
+    highlight_genes = highlight_genes,
+    highlight_color = highlight_color,
+    label_color = label_color,
+    ...
+  )
 }
 
 #' @export
-manhattan.data.frame = function(gwas, output, lower_logp_threshold = 3.0, label_top_n = NULL, ...) {
+manhattan.data.frame = function(gwas, output, lower_logp_threshold = 3.0, label_top_n = NULL,
+                                label_strategy = "lead_per_locus", label_locus_window_kb = 500,
+                                italic_gene_labels = TRUE, highlight_genes = NULL,
+                                highlight_color = "red3", label_color = "black", ...) {
   log_info("Now preparing to plot")
 
   # Create chromosome lookup
@@ -161,14 +322,26 @@ manhattan.data.frame = function(gwas, output, lower_logp_threshold = 3.0, label_
   log_info(glue("Done preparing to plot {nrow(prepared)} SNPs."))
 
   # Create plot
-  p = create_manhattan_plot(prepared, axis, label_top_n = label_top_n)
+  p = create_manhattan_plot(
+    prepared, axis,
+    label_top_n = label_top_n,
+    label_strategy = label_strategy,
+    label_locus_window_kb = label_locus_window_kb,
+    italic_gene_labels = italic_gene_labels,
+    highlight_genes = highlight_genes,
+    highlight_color = highlight_color,
+    label_color = label_color
+  )
 
   # Save plot
   save_manhattan_plot(p, output, ...)
 }
 
 #' @export
-manhattan.GWASFormatter = function(gwas, output, lower_logp_threshold = 3.0, label_top_n = NULL, ...) {
+manhattan.GWASFormatter = function(gwas, output, lower_logp_threshold = 3.0, label_top_n = NULL,
+                                   label_strategy = "lead_per_locus", label_locus_window_kb = 500,
+                                   italic_gene_labels = TRUE, highlight_genes = NULL,
+                                   highlight_color = "red3", label_color = "black", ...) {
   log_info("Now preparing to plot")
 
   # Create chromosome lookup and copy to database connection
@@ -190,7 +363,13 @@ manhattan.GWASFormatter = function(gwas, output, lower_logp_threshold = 3.0, lab
 
   # Create plot (no y_max_cap for GWASFormatter to avoid pmin issue with database)
   p = create_manhattan_plot(prepared, axis, y_max_cap = max(-log10(prepared$PVALUE)),
-                            label_top_n = label_top_n)
+                            label_top_n = label_top_n,
+                            label_strategy = label_strategy,
+                            label_locus_window_kb = label_locus_window_kb,
+                            italic_gene_labels = italic_gene_labels,
+                            highlight_genes = highlight_genes,
+                            highlight_color = highlight_color,
+                            label_color = label_color)
 
   # Save plot
   save_manhattan_plot(p, output, ...)

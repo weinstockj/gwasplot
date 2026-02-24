@@ -1,34 +1,43 @@
 # Internal implementation — not exported
-.make_qqplot = function(pvalues,
-                        should.thin = TRUE,
-                        thin.obs.places = 2,
-                        thin.exp.places = 2,
-                        xlab = expression(paste("Expected (", -log[10], " p-value)")),
-                        ylab = expression(paste("Observed (", -log[10], " p-value)")),
-                        draw.conf = TRUE,
-                        conf.points = 1000,
-                        conf.col = "lightgray",
-                        conf.alpha = .05,
-                        already.transformed = FALSE,
-                        point.size = 1.5,
-                        point.alpha = 0.7,
-                        point.color = "#3366FF",
-                        ...) {
+.make_qqplot = function(
+  pvalues,
+  should.thin = TRUE,
+  thin.obs.places = 2,
+  thin.exp.places = 2,
+  xlab = expression(paste("Expected (", -log[10], " p-value)")),
+  ylab = expression(paste("Observed (", -log[10], " p-value)")),
+  draw.conf = TRUE,
+  conf.points = 1000,
+  conf.col = "lightgray",
+  conf.alpha = .05,
+  already.transformed = FALSE,
+  point.size = 1.5,
+  point.alpha = 0.7,
+  point.color = "#3366FF",
+  ...
+) {
   # Error checking
-  if (length(pvalues) == 0)
+  if (length(pvalues) == 0) {
     stop("pvalue vector is empty, can't draw plot")
-  if (!(class(pvalues) == "numeric" ||
-        (class(pvalues) == "list" &&
-         all(sapply(pvalues, class) == "numeric"))))
+  }
+  if (
+    !(class(pvalues) == "numeric" ||
+      (class(pvalues) == "list" &&
+        all(sapply(pvalues, class) == "numeric")))
+  ) {
     stop("pvalue vector is not numeric, can't draw plot")
-  if (any(is.na(unlist(pvalues))))
+  }
+  if (any(is.na(unlist(pvalues)))) {
     stop("pvalue vector contains NA values, can't draw plot")
+  }
   if (already.transformed == FALSE) {
-    if (any(unlist(pvalues) == 0))
+    if (any(unlist(pvalues) == 0)) {
       stop("pvalue vector contains zeros, can't draw plot")
+    }
   } else {
-    if (any(unlist(pvalues) < 0))
+    if (any(unlist(pvalues) < 0)) {
       stop("-log10 pvalue vector contains negative values, can't draw plot")
+    }
   }
 
   # Process data
@@ -59,10 +68,15 @@
     for (i in 1:length(pvalues)) {
       if (!already.transformed) {
         plot_data$observed[rs[i]:re[i]] <- -log10(pvalues[[i]])
-        plot_data$expected[rs[i]:re[i]] <- -log10((rank(pvalues[[i]], ties.method = "first") - 0.5) / nn[i])
+        plot_data$expected[rs[i]:re[i]] <- -log10(
+          (rank(pvalues[[i]], ties.method = "first") - 0.5) / nn[i]
+        )
       } else {
         plot_data$observed[rs[i]:re[i]] <- pvalues[[i]]
-        plot_data$expected[rs[i]:re[i]] <- -log10((nn[i] + 1 - rank(pvalues[[i]], ties.method = "first") - 0.5) / (nn[i] + 1))
+        plot_data$expected[rs[i]:re[i]] <- -log10(
+          (nn[i] + 1 - rank(pvalues[[i]], ties.method = "first") - 0.5) /
+            (nn[i] + 1)
+        )
       }
     }
   } else {
@@ -75,10 +89,14 @@
     )
 
     if (!already.transformed) {
-      plot_data$expected <- -log10((rank(pvalues, ties.method = "first") - 0.5) / n)
+      plot_data$expected <- -log10(
+        (rank(pvalues, ties.method = "first") - 0.5) / n
+      )
       plot_data$observed <- -log10(pvalues)
     } else {
-      plot_data$expected <- -log10((n - rank(pvalues, ties.method = "first") - 0.5) / n)
+      plot_data$expected <- -log10(
+        (n - rank(pvalues, ties.method = "first") - 0.5) / n
+      )
       plot_data$observed <- pvalues
     }
   }
@@ -87,14 +105,16 @@
   if (should.thin) {
     if (!is.null(grp)) {
       plot_data <- dplyr::distinct(
-        dplyr::mutate(plot_data,
+        dplyr::mutate(
+          plot_data,
           observed = round(observed, thin.obs.places),
           expected = round(expected, thin.exp.places)
         )
       )
     } else {
       plot_data <- dplyr::distinct(
-        dplyr::mutate(plot_data,
+        dplyr::mutate(
+          plot_data,
           observed = round(observed, thin.obs.places),
           expected = round(expected, thin.exp.places)
         )
@@ -109,8 +129,8 @@
 
     # Convert matrix to data frame for ggplot
     conf_df <- data.frame(
-      expected = conf_data[,1],
-      observed = conf_data[,2]
+      expected = conf_data[, 1],
+      observed = conf_data[, 2]
     )
   }
 
@@ -119,35 +139,52 @@
 
   # Add confidence interval
   if (draw.conf) {
-    p <- p + ggplot2::geom_polygon(data = conf_df,
-                                  ggplot2::aes(x = expected, y = observed),
-                                  fill = conf.col,
-                                  alpha = 0.5)
+    p <- p +
+      ggplot2::geom_polygon(
+        data = conf_df,
+        ggplot2::aes(x = expected, y = observed),
+        fill = conf.col,
+        alpha = 0.5
+      )
   }
 
   # Add points
   if (!is.null(grp)) {
-    p <- p + ggplot2::geom_point(ggplot2::aes(color = group),
-                                alpha = point.alpha,
-                                size = point.size)
+    p <- p +
+      ggplot2::geom_point(
+        ggplot2::aes(color = group),
+        alpha = point.alpha,
+        size = point.size
+      )
   } else {
-    p <- p + ggplot2::geom_point(color = point.color,
-                                alpha = point.alpha,
-                                size = point.size)
+    p <- p +
+      ggplot2::geom_point(
+        color = point.color,
+        alpha = point.alpha,
+        size = point.size
+      )
   }
 
   # Add diagonal line
-  p <- p + ggplot2::geom_abline(slope = 1, intercept = 0,
-                              color = "darkgray",
-                              linetype = "dashed")
+  p <- p +
+    ggplot2::geom_abline(
+      slope = 1,
+      intercept = 0,
+      color = "darkgray",
+      linetype = "dashed"
+    )
 
   # Adjust theme and appearance
-  p <- p + ggplot2::theme_bw(base_size = 12, base_family = "Helvetica") +
+  p <- p +
+    ggplot2::theme_bw(base_size = 12, base_family = "Helvetica") +
     ggplot2::coord_equal() +
     ggplot2::labs(x = xlab, y = ylab) +
     ggplot2::theme(
       panel.grid.minor = ggplot2::element_blank(),
-      panel.grid.major = ggplot2::element_line(color = "lightgray", linetype = "dotted"),
+      panel.grid.major = ggplot2::element_line(
+        color = "lightgray",
+        linetype = "dotted"
+      ),
       panel.border = ggplot2::element_rect(color = "black", fill = NA),
       axis.line = ggplot2::element_line(color = "black"),
       axis.text = ggplot2::element_text(color = "black"),
@@ -180,10 +217,24 @@ qqplot <- function(x, output, ...) UseMethod("qqplot")
 
 #' @describeIn qqplot Method for GWASFormatter objects
 #' @export
-qqplot.GWASFormatter <- function(x, output, width = 5, height = 5, dpi = 300, ...) {
-  pvals <- dplyr::tbl(x$con, "summary_stats") %>% dplyr::pull(PVALUE)
-  plt   <- .make_qqplot(pvals, ...)
-  ggplot2::ggsave(output, plt, bg = "white", width = width, height = height, dpi = dpi)
+qqplot.GWASFormatter <- function(
+  x,
+  output,
+  width = 5,
+  height = 5,
+  dpi = 300,
+  ...
+) {
+  pvals <- x$data %>% dplyr::pull(PVALUE)
+  plt <- .make_qqplot(pvals, ...)
+  ggplot2::ggsave(
+    output,
+    plt,
+    bg = "white",
+    width = width,
+    height = height,
+    dpi = dpi
+  )
   invisible(plt)
 }
 
@@ -195,9 +246,23 @@ qqplot.tbl_df <- function(x, output, width = 5, height = 5, dpi = 300, ...) {
 
 #' @describeIn qqplot Method for data.frame objects
 #' @export
-qqplot.data.frame <- function(x, output, width = 5, height = 5, dpi = 300, ...) {
+qqplot.data.frame <- function(
+  x,
+  output,
+  width = 5,
+  height = 5,
+  dpi = 300,
+  ...
+) {
   plt <- .make_qqplot(x$PVALUE, ...)
-  ggplot2::ggsave(output, plt, bg = "white", width = width, height = height, dpi = dpi)
+  ggplot2::ggsave(
+    output,
+    plt,
+    bg = "white",
+    width = width,
+    height = height,
+    dpi = dpi
+  )
   invisible(plt)
 }
 
