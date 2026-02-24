@@ -4,34 +4,21 @@
 \alias{query_ot_api_v2g}
 \title{Query Open Targets Platform API for Locus-to-Gene (L2G) predictions}
 \usage{
-query_ot_api_v2g(variant_id = "19_44908822_C_T", pageindex = 0, pagesize = 20)
+query_ot_api_v2g(variant_id = "19_44908822_C_T")
 }
 \arguments{
-\item{variant_id}{A string representing the variant ID in format "CHR_POS_REF_ALT" 
+\item{variant_id}{A string representing the variant ID in format "CHR_POS_REF_ALT"
 (e.g., "19_44908822_C_T") or an rsID (e.g., "rs123456").}
-
-\item{pageindex}{Pagination index (currently unused in new API structure).}
-
-\item{pagesize}{Pagination size (currently unused in new API structure).}
 }
 \value{
-A list containing L2G predictions and associated data from credible sets.
+A tibble with columns `ID`, `l2g_gene_id`, `l2g_gene_name`, `l2g_score`.
 }
 \description{
-This function retrieves L2G predictions from credible sets containing the specified variant.
-It replaces the deprecated V2G functionality from the old Open Targets Genetics API.
-}
-\note{
-This function has been migrated from the deprecated Open Targets Genetics API
-  to the new Open Targets Platform API. The functionality has changed from direct
-  variant-to-gene mapping to locus-to-gene predictions via credible sets.
+Query Open Targets Platform API for Locus-to-Gene (L2G) predictions
 }
 \examples{
 \dontrun{
-  # Query by variant ID
   result <- query_ot_api_v2g("19_44908822_C_T")
-  
-  # Query by rsID  
   result <- query_ot_api_v2g("rs123456")
 }
 }

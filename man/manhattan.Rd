@@ -4,7 +4,19 @@
 \alias{manhattan}
 \title{Plot a Manhattan plot from a gwas object}
 \usage{
-manhattan(gwas, output, lower_logp_threshold = 3, ...)
+manhattan(
+  gwas,
+  output,
+  lower_logp_threshold = 3,
+  label_top_n = NULL,
+  label_strategy = "lead_per_locus",
+  label_locus_window_kb = 500,
+  italic_gene_labels = TRUE,
+  highlight_genes = NULL,
+  highlight_color = "red3",
+  label_color = "black",
+  ...
+)
 }
 \arguments{
 \item{gwas}{A gwas object containing the data to plot.}
@@ -12,6 +24,26 @@ manhattan(gwas, output, lower_logp_threshold = 3, ...)
 \item{output}{The output file name.}
 
 \item{lower_logp_threshold}{The lower threshold for the -log10(p-value) to plot. Default is 3.0.}
+
+\item{label_top_n}{Integer. If set and a `gene_name` column is present, annotate the
+top N variants (by p-value) with labels using ggrepel. If `gene_name` is missing,
+labels fall back to cytoband-like text (e.g., `chr4p16.3`). Default is NULL (no labels).}
+
+\item{label_strategy}{Label selection mode: `"top_n"` (global top N by p-value)
+or `"lead_per_locus"` (one lead per locus, then top N). Default `"lead_per_locus"`.}
+
+\item{label_locus_window_kb}{Locus window size in kilobases used when
+`label_strategy = "lead_per_locus"`. Default 500.}
+
+\item{italic_gene_labels}{Logical. If TRUE, gene labels are italicized; cytoband
+fallback labels remain plain text. Default TRUE.}
+
+\item{highlight_genes}{Optional character vector of gene symbols to highlight
+(e.g., novel genes). Matching labels are colored with `highlight_color`.}
+
+\item{highlight_color}{Color for highlighted labels. Default `"red3"`.}
+
+\item{label_color}{Color for non-highlighted labels. Default `"black"`.}
 
 \item{...}{Additional arguments passed to `ggsave`.}
 }

@@ -1,4 +1,6 @@
 url: https://weinstocklab.github.io/gwasplot/
 template:
   bootstrap: 5
+llm-docs: false
+
 

@@ -2,35 +2,54 @@
 % Please edit documentation in R/qqplot.R
 \name{qqplot}
 \alias{qqplot}
-\title{QQ plot for p-values}
+\alias{qqplot.GWASFormatter}
+\alias{qqplot.tbl_df}
+\alias{qqplot.data.frame}
+\alias{qqplot.default}
+\title{QQ plot for GWAS p-values}
 \usage{
-qqplot(
-  pvalues,
-  should.thin = TRUE,
-  thin.obs.places = 2,
-  thin.exp.places = 2,
-  xlab = expression(paste("Expected (", -log[10], " p-value)")),
-  ylab = expression(paste("Observed (", -log[10], " p-value)")),
-  draw.conf = TRUE,
-  conf.points = 1000,
-  conf.col = "lightgray",
-  conf.alpha = 0.05,
-  already.transformed = FALSE,
-  point.size = 1.5,
-  point.alpha = 0.7,
-  point.color = "#3366FF",
-  ...
-)
+qqplot(x, output, ...)
+
+\method{qqplot}{GWASFormatter}(x, output, width = 5, height = 5, dpi = 300, ...)
+
+\method{qqplot}{tbl_df}(x, output, width = 5, height = 5, dpi = 300, ...)
+
+\method{qqplot}{data.frame}(x, output, width = 5, height = 5, dpi = 300, ...)
+
+\method{qqplot}{default}(x, output, ...)
 }
 \arguments{
-\item{pvalues}{A numeric vector of p-values or a list of numeric vectors of p-values.}
+\item{x}{A GWASFormatter object, data.frame/tibble with a `PVALUE` column,
+or a numeric vector (or list of numeric vectors) of p-values.}
 
-\item{should.thin}{Logical indicating whether to thin the points for plotting. Default is TRUE.}
+\item{output}{Path for the saved plot file (required for object methods).}
 
-\item{thin.obs.places}{Number of decimal places to round the observed p-values for thinning. Default is 2.}
+\item{...}{Additional arguments passed to the underlying `.make_qqplot()`
+(e.g. `should.thin`, `draw.conf`, `point.color`).}
 
-\item{thin.exp.places}{Number of decimal places to round the expected p-values for thinning. Default is 2.}
+\item{width}{Plot width in inches. Default 5.}
+
+\item{height}{Plot height in inches. Default 5.}
+
+\item{dpi}{Plot resolution. Default 300.}
+}
+\value{
+Invisibly returns the ggplot object.
 }
 \description{
-QQ plot for p-values
+An S3 generic that accepts a GWASFormatter object, data.frame/tibble, or a
+raw numeric vector of p-values. For object-based inputs the plot is saved to
+`output`; for raw vectors the ggplot object is returned invisibly (backward-
+compatible with the previous signature).
 }
+\section{Methods (by class)}{
+\itemize{
+\item \code{qqplot(GWASFormatter)}: Method for GWASFormatter objects
+
+\item \code{qqplot(tbl_df)}: Method for tibble objects
+
+\item \code{qqplot(data.frame)}: Method for data.frame objects
+
+\item \code{qqplot(default)}: Default method for numeric vectors or lists of numeric vectors
+
+}}

@@ -10,6 +10,7 @@
 ^\.github$
 .*.duckdb$
 duckdb$
+AGENTS.md
 db$
 tmp$
 .*.db$
