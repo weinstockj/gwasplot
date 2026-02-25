@@ -1,6 +1,10 @@
 <urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
 <url><loc>https://weinstocklab.github.io/gwasplot/404.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/LICENSE.html</loc></url>
+<url><loc>https://weinstocklab.github.io/gwasplot/articles/basic-plots.html</loc></url>
+<url><loc>https://weinstocklab.github.io/gwasplot/articles/gene-annotation.html</loc></url>
+<url><loc>https://weinstocklab.github.io/gwasplot/articles/index.html</loc></url>
+<url><loc>https://weinstocklab.github.io/gwasplot/articles/loci-annotation.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/authors.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/index.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/annotate_variants_ensembl.html</loc></url>
