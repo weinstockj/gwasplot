@@ -553,6 +553,11 @@
       ],
       "Hash": "0154ac5b9ef4df1a7be3a54602e781cf"
     },
+    "quarto": {
+      "Package": "quarto",
+      "Version": "1.5.1",
+      "Source": "Repository"
+    },
     "ragg": {
       "Package": "ragg",
       "Version": "1.5.0",
