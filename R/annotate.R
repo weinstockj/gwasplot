@@ -44,14 +44,97 @@ select_top_hits.data.frame <- function(x, threshold = 5e-8, ...) {
 #' @param ... Additional arguments passed to methods.
 #' @return The input object with gene annotations added.
 #' @export
-find_nearest_gene = function(x, ...) {
+find_nearest_gene = function(x, threshold = 1e5, pvalue_threshold = NULL, ...) {
   UseMethod("find_nearest_gene")
 }
 
 #' @describeIn find_nearest_gene Find the nearest gene for each variant in a gwas object
 #' @param threshold The distance threshold to consider a gene as nearest. Default is 1e5.
 #' @export
-find_nearest_gene.GWASFormatter = function(x, threshold = 1e5, ...) {
+find_nearest_gene.GWASFormatter = function(
+  x,
+  threshold = 1e5,
+  pvalue_threshold = NULL,
+  ...
+) {
+  if (!is.null(pvalue_threshold)) {
+    con <- x$con
+
+    # Materialise significant variants inside x$con — no data leaves DuckDB
+    sig_query <- x$data %>% dplyr::filter(PVALUE < pvalue_threshold)
+    if (!"ID" %in% colnames(sig_query)) {
+      sig_query <- dplyr::mutate(sig_query, ID = paste(CHROM, POS, sep = "_"))
+    }
+
+    sig_tbl <- sig_query %>%
+      dplyr::compute(name = "__sig_variants__", overwrite = TRUE)
+
+    n_sig <- dplyr::count(sig_tbl) %>% dplyr::pull(n)
+    if (n_sig == 0L) {
+      cli::cli_inform("No variants below pvalue_threshold {pvalue_threshold}.")
+      return(x)
+    }
+
+    # Load gene reference if not already in this connection
+    if (!"human_genes" %in% DBI::dbListTables(con)) {
+      dplyr::copy_to(
+        con,
+        human_genes,
+        name = "human_genes",
+        temporary = FALSE,
+        overwrite = TRUE
+      )
+    }
+
+    # Gene intervals scoped to this query
+    DBI::dbExecute(
+      con,
+      glue::glue(
+        "CREATE OR REPLACE TABLE __gene_intervals__ AS
+       SELECT gene_id, gene_name, chrom,
+         start - {format(threshold, scientific = FALSE)} AS expanded_start,
+         \"end\" + {format(threshold, scientific = FALSE)} AS expanded_end,
+         start, \"end\"
+       FROM human_genes
+       WHERE gene_biotype = 'protein_coding' AND gene_name IS NOT NULL"
+      )
+    )
+
+    # Range join on the small significant subset — pure DuckDB
+    DBI::dbExecute(
+      con,
+      "CREATE OR REPLACE TABLE __locus_gene_annot__ AS
+       WITH ng AS (
+         SELECT t.CHROM, t.POS,
+           g.gene_id, g.gene_name,
+           CASE
+             WHEN t.POS >= g.start AND t.POS <= g.\"end\" THEN 0
+             WHEN t.POS < g.start THEN g.start - t.POS
+             ELSE t.POS - g.\"end\"
+           END AS distance
+         FROM __sig_variants__ t
+         JOIN __gene_intervals__ g
+           ON t.CHROM = g.chrom
+          AND t.POS >= g.expanded_start
+          AND t.POS <= g.expanded_end
+       ),
+       rk AS (
+         SELECT *, ROW_NUMBER() OVER (PARTITION BY ID ORDER BY distance) AS rn
+         FROM ng
+       )
+       SELECT CHROM, POS, gene_id, gene_name,
+              CAST(distance AS INTEGER) AS distance
+       FROM rk WHERE rn = 1"
+    )
+
+    x$data <- x$data %>%
+      dplyr::left_join(
+        dplyr::tbl(con, "__locus_gene_annot__"),
+        by = c("CHROM", "POS")
+      )
+    return(x)
+  }
+
   # Start timing
   start_time <- Sys.time()
   cli::cli_alert_info("Starting gene annotation...")
@@ -166,9 +249,18 @@ find_nearest_gene.tbl_df = function(
   chrom_col = "CHROM",
   pos_col = "POS",
   id_col = "ID",
+  pvalue_threshold = NULL,
   ...
 ) {
-  find_nearest_gene.data.frame(x, threshold, chrom_col, pos_col, id_col, ...)
+  find_nearest_gene.data.frame(
+    x,
+    threshold,
+    chrom_col,
+    pos_col,
+    id_col,
+    pvalue_threshold,
+    ...
+  )
 }
 
 #' @export
@@ -178,8 +270,44 @@ find_nearest_gene.data.frame = function(
   chrom_col = "CHROM",
   pos_col = "POS",
   id_col = "ID",
+  pvalue_threshold = NULL,
   ...
 ) {
+  if (!is.null(pvalue_threshold)) {
+    x <- dplyr::select(x, -dplyr::any_of(c("gene_name", "gene_id", "distance")))
+    sig <- dplyr::filter(x, PVALUE < pvalue_threshold)
+    if (nrow(sig) == 0) {
+      cli::cli_inform("No variants below pvalue_threshold {pvalue_threshold}.")
+      return(dplyr::mutate(
+        x,
+        gene_name = NA_character_,
+        gene_id = NA_character_,
+        distance = NA_integer_
+      ))
+    }
+    added_id <- !id_col %in% colnames(sig)
+    if (added_id) {
+      sig <- dplyr::mutate(sig, !!id_col := paste(CHROM, POS, sep = "_"))
+    }
+
+    sig_ann <- find_nearest_gene(
+      sig,
+      threshold = threshold,
+      chrom_col = chrom_col,
+      pos_col = pos_col,
+      id_col = id_col
+    )
+    gene_cols <- dplyr::select(
+      sig_ann,
+      CHROM,
+      POS,
+      gene_name,
+      gene_id,
+      distance
+    )
+    return(dplyr::left_join(x, gene_cols, by = c("CHROM", "POS")))
+  }
+
   start_time <- Sys.time()
   cli::cli_alert_info("Starting gene annotation...")
 
@@ -651,34 +779,40 @@ identify_loci.GWASFormatter <- function(
 #'   }
 #'   Variants with no L2G predictions receive `NA` in these columns.
 #' @export
-annotate_with_l2g <- function(x, id_col = "ID", ...) UseMethod("annotate_with_l2g")
+annotate_with_l2g <- function(x, id_col = "ID", ...) {
+  UseMethod("annotate_with_l2g")
+}
 
 #' @export
 annotate_with_l2g.data.frame <- function(
   x,
-  id_col    = "ID",
-  method    = c("api", "bulk"),
-  release   = NULL,
+  id_col = "ID",
+  method = c("api", "bulk"),
+  release = NULL,
   cache_dir = tools::R_user_dir("gwasplot", "data"),
-  ask       = interactive(),
+  ask = interactive(),
   ...
 ) {
   method <- match.arg(method)
   if (method == "api") {
     ids <- x[[id_col]]
-    cli::cli_alert_info("Querying Open Targets L2G for {length(ids)} variant(s)...")
+    cli::cli_alert_info(
+      "Querying Open Targets L2G for {length(ids)} variant(s)..."
+    )
 
     results <- vector("list", length(ids))
     cli::cli_progress_bar("Querying L2G", total = length(ids))
     for (i in seq_along(ids)) {
       results[[i]] <- tryCatch(
         genesForVariant(ids[[i]]),
-        error = function(e) tibble::tibble(
-          ID            = ids[[i]],
-          l2g_gene_id   = NA_character_,
-          l2g_gene_name = NA_character_,
-          l2g_score     = NA_real_
-        )
+        error = function(e) {
+          tibble::tibble(
+            ID = ids[[i]],
+            l2g_gene_id = NA_character_,
+            l2g_gene_name = NA_character_,
+            l2g_score = NA_real_
+          )
+        }
       )
       cli::cli_progress_update()
     }
@@ -694,11 +828,11 @@ annotate_with_l2g.data.frame <- function(
 #' @export
 annotate_with_l2g.tbl_df <- function(
   x,
-  id_col    = "ID",
-  method    = c("api", "bulk"),
-  release   = NULL,
+  id_col = "ID",
+  method = c("api", "bulk"),
+  release = NULL,
   cache_dir = tools::R_user_dir("gwasplot", "data"),
-  ask       = interactive(),
+  ask = interactive(),
   ...
 ) {
   annotate_with_l2g.data.frame(x, id_col, method, release, cache_dir, ask, ...)
@@ -708,51 +842,62 @@ annotate_with_l2g.tbl_df <- function(
 
 # Detect latest release from the Platform GraphQL meta endpoint.
 .ot_release_latest <- function() {
-  tryCatch({
-    resp <- httr::POST(
-      "https://api.platform.opentargets.org/api/v4/graphql",
-      httr::content_type_json(),
-      body = jsonlite::toJSON(
-        list(query = "{ meta { dataVersion { year month } } }"),
-        auto_unbox = TRUE
-      ),
-      httr::timeout(15)
-    )
-    httr::stop_for_status(resp)
-    v <- jsonlite::fromJSON(
-      httr::content(resp, "text", encoding = "UTF-8"), flatten = TRUE
-    )$data$meta$dataVersion
-    # year and month are returned as strings (e.g. "25", "12")
-    sprintf("%s.%02d", v$year, as.integer(v$month))
-  }, error = function(e) {
-    cli::cli_abort(c(
-      "!" = "Could not detect the latest Open Targets Platform release.",
-      "i" = "Specify manually, e.g. {.code release = \"25.09\"}",
-      "x" = conditionMessage(e)
-    ))
-  })
+  tryCatch(
+    {
+      resp <- httr::POST(
+        "https://api.platform.opentargets.org/api/v4/graphql",
+        httr::content_type_json(),
+        body = jsonlite::toJSON(
+          list(query = "{ meta { dataVersion { year month } } }"),
+          auto_unbox = TRUE
+        ),
+        httr::timeout(15)
+      )
+      httr::stop_for_status(resp)
+      v <- jsonlite::fromJSON(
+        httr::content(resp, "text", encoding = "UTF-8"),
+        flatten = TRUE
+      )$data$meta$dataVersion
+      # year and month are returned as strings (e.g. "25", "12")
+      sprintf("%s.%02d", v$year, as.integer(v$month))
+    },
+    error = function(e) {
+      cli::cli_abort(c(
+        "!" = "Could not detect the latest Open Targets Platform release.",
+        "i" = "Specify manually, e.g. {.code release = \"25.09\"}",
+        "x" = conditionMessage(e)
+      ))
+    }
+  )
 }
 
 # Enumerate all snappy.parquet URLs in an FTP directory listing.
 .ot_ftp_list_parquet <- function(table, release) {
   base_url <- sprintf(
     "https://ftp.ebi.ac.uk/pub/databases/opentargets/platform/%s/output/%s/",
-    release, table
+    release,
+    table
   )
-  tryCatch({
-    html <- httr::content(
-      httr::GET(base_url, httr::timeout(15)),
-      "text", encoding = "UTF-8"
-    )
-    files <- regmatches(
-      html,
-      gregexpr('href="([^"]+\\.snappy\\.parquet)"', html, perl = TRUE)
-    )[[1]]
-    names <- sub('href="([^"]+)"', "\\1", files)
-    paste0(base_url, names)
-  }, error = function(e) {
-    cli::cli_abort("Could not enumerate parquet files for {.val {table}} ({release}): {conditionMessage(e)}")
-  })
+  tryCatch(
+    {
+      html <- httr::content(
+        httr::GET(base_url, httr::timeout(15)),
+        "text",
+        encoding = "UTF-8"
+      )
+      files <- regmatches(
+        html,
+        gregexpr('href="([^"]+\\.snappy\\.parquet)"', html, perl = TRUE)
+      )[[1]]
+      names <- sub('href="([^"]+)"', "\\1", files)
+      paste0(base_url, names)
+    },
+    error = function(e) {
+      cli::cli_abort(
+        "Could not enumerate parquet files for {.val {table}} ({release}): {conditionMessage(e)}"
+      )
+    }
+  )
 }
 
 # Build remote parquet glob URL for a given table and release.
@@ -766,10 +911,15 @@ annotate_with_l2g.tbl_df <- function(
   for (tbl in c("credible_set", "credibleSet")) {
     url <- sprintf(
       "https://ftp.ebi.ac.uk/pub/databases/opentargets/platform/%s/output/%s/",
-      release, tbl
+      release,
+      tbl
     )
-    resp <- tryCatch(httr::HEAD(url, httr::timeout(10)), error = function(e) NULL)
-    if (!is.null(resp) && httr::status_code(resp) %in% c(200L, 301L, 302L, 303L)) {
+    resp <- tryCatch(httr::HEAD(url, httr::timeout(10)), error = function(e) {
+      NULL
+    })
+    if (
+      !is.null(resp) && httr::status_code(resp) %in% c(200L, 301L, 302L, 303L)
+    ) {
       return(tbl)
     }
   }
@@ -782,22 +932,35 @@ annotate_with_l2g.tbl_df <- function(
 .ot_dir_size_mb <- function(table, release) {
   url <- sprintf(
     "https://ftp.ebi.ac.uk/pub/databases/opentargets/platform/%s/output/%s/",
-    release, table
+    release,
+    table
   )
-  tryCatch({
-    resp <- httr::GET(url, httr::timeout(15))
-    if (httr::http_error(resp)) return(NA_real_)
-    html <- httr::content(resp, "text", encoding = "UTF-8")
-    # Apache FTP listings show human-readable sizes: "2.4M", "700M", "1.2G", "500K"
-    m <- regmatches(html, gregexpr("([0-9]+\\.?[0-9]*)([KMG])", html, perl = TRUE))[[1]]
-    if (length(m) == 0L) return(NA_real_)
-    nums   <- as.numeric(sub("([0-9.]+)[KMG]", "\\1", m))
-    units  <- sub("[0-9.]+([KMG])", "\\1", m)
-    mb_each <- ifelse(units == "K", nums / 1024,
-               ifelse(units == "M", nums,
-               ifelse(units == "G", nums * 1024, 0)))
-    round(sum(mb_each, na.rm = TRUE), 0)
-  }, error = function(e) NA_real_)
+  tryCatch(
+    {
+      resp <- httr::GET(url, httr::timeout(15))
+      if (httr::http_error(resp)) {
+        return(NA_real_)
+      }
+      html <- httr::content(resp, "text", encoding = "UTF-8")
+      # Apache FTP listings show human-readable sizes: "2.4M", "700M", "1.2G", "500K"
+      m <- regmatches(
+        html,
+        gregexpr("([0-9]+\\.?[0-9]*)([KMG])", html, perl = TRUE)
+      )[[1]]
+      if (length(m) == 0L) {
+        return(NA_real_)
+      }
+      nums <- as.numeric(sub("([0-9.]+)[KMG]", "\\1", m))
+      units <- sub("[0-9.]+([KMG])", "\\1", m)
+      mb_each <- ifelse(
+        units == "K",
+        nums / 1024,
+        ifelse(units == "M", nums, ifelse(units == "G", nums * 1024, 0))
+      )
+      round(sum(mb_each, na.rm = TRUE), 0)
+    },
+    error = function(e) NA_real_
+  )
 }
 
 # Download parquet files one-by-one via httr (EBI FTP does not support Range
@@ -806,8 +969,12 @@ annotate_with_l2g.tbl_df <- function(
 # Writes a '.complete' sentinel on success so callers can distinguish a full
 # cache from a partial one.
 # If select_sql / where_sql are set, each file is filtered at download time.
-.ot_httpfs_copy <- function(remote_urls, local_dir,
-                             select_sql = "*", where_sql = NULL) {
+.ot_httpfs_copy <- function(
+  remote_urls,
+  local_dir,
+  select_sql = "*",
+  where_sql = NULL
+) {
   dir.create(local_dir, recursive = TRUE, showWarnings = FALSE)
 
   filter_on_download <- !identical(select_sql, "*") || !is.null(where_sql)
@@ -825,28 +992,42 @@ annotate_with_l2g.tbl_df <- function(
   )
   for (url in remote_urls) {
     fname <- basename(url)
-    dest  <- file.path(local_dir, fname)
+    dest <- file.path(local_dir, fname)
 
-    if (file.exists(dest)) next   # already downloaded
+    if (file.exists(dest)) {
+      next
+    } # already downloaded
 
     if (filter_on_download) {
       # Download to a temp file, then filter into the cache dir
       tmp <- tempfile(fileext = ".parquet")
       on.exit(unlink(tmp), add = TRUE)
-      resp <- httr::GET(url, httr::write_disk(tmp, overwrite = TRUE),
-                        httr::timeout(600))
+      resp <- httr::GET(
+        url,
+        httr::write_disk(tmp, overwrite = TRUE),
+        httr::timeout(600)
+      )
       httr::stop_for_status(resp)
       con <- DBI::dbConnect(duckdb::duckdb())
       where_clause <- if (!is.null(where_sql)) paste("WHERE", where_sql) else ""
-      DBI::dbExecute(con, sprintf(
-        "COPY (SELECT %s FROM read_parquet('%s') %s)
+      DBI::dbExecute(
+        con,
+        sprintf(
+          "COPY (SELECT %s FROM read_parquet('%s') %s)
          TO '%s' (FORMAT PARQUET, COMPRESSION SNAPPY)",
-        select_sql, gsub("\\\\", "/", tmp), where_clause, dest
-      ))
+          select_sql,
+          gsub("\\\\", "/", tmp),
+          where_clause,
+          dest
+        )
+      )
       DBI::dbDisconnect(con, shutdown = TRUE)
     } else {
-      resp <- httr::GET(url, httr::write_disk(dest, overwrite = TRUE),
-                        httr::timeout(600))
+      resp <- httr::GET(
+        url,
+        httr::write_disk(dest, overwrite = TRUE),
+        httr::timeout(600)
+      )
       httr::stop_for_status(resp)
     }
     cli::cli_progress_update()
@@ -872,22 +1053,31 @@ annotate_with_l2g.tbl_df <- function(
 # Core DuckDB query: join credibleSet index + L2G predictions, return the
 # top-scoring gene per input variant.
 .ot_l2g_query <- function(variant_ids, l2g_path, cs_path) {
-  norm_ids  <- gsub(":", "_", sub("^chr", "", variant_ids, ignore.case = TRUE))
+  norm_ids <- gsub(":", "_", sub("^chr", "", variant_ids, ignore.case = TRUE))
   use_httpfs <- any(grepl("^https://", c(unlist(l2g_path), unlist(cs_path))))
 
   con <- DBI::dbConnect(duckdb::duckdb())
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
-  if (use_httpfs) DBI::dbExecute(con, "INSTALL httpfs; LOAD httpfs;")
+  if (use_httpfs) {
+    DBI::dbExecute(con, "INSTALL httpfs; LOAD httpfs;")
+  }
 
   DBI::dbWriteTable(
-    con, "input_ids",
-    data.frame(input_id = variant_ids, norm_id = norm_ids,
-               stringsAsFactors = FALSE),
-    overwrite = TRUE, temporary = TRUE
+    con,
+    "input_ids",
+    data.frame(
+      input_id = variant_ids,
+      norm_id = norm_ids,
+      stringsAsFactors = FALSE
+    ),
+    overwrite = TRUE,
+    temporary = TRUE
   )
 
-  result <- DBI::dbGetQuery(con, sprintf(
-    "WITH cs AS (
+  result <- DBI::dbGetQuery(
+    con,
+    sprintf(
+      "WITH cs AS (
        SELECT studyLocusId, variantId
        FROM read_parquet(%s)
        WHERE variantId IN (SELECT norm_id FROM input_ids)
@@ -911,14 +1101,18 @@ annotate_with_l2g.tbl_df <- function(
      FROM ranked r
      JOIN input_ids i ON r.norm_id = i.norm_id
      WHERE r.rn = 1",
-    .parquet_glob(cs_path), .parquet_glob(l2g_path)
-  )) %>% tibble::as_tibble()
+      .parquet_glob(cs_path),
+      .parquet_glob(l2g_path)
+    )
+  ) %>%
+    tibble::as_tibble()
 
   # Attach gene symbols from the built-in reference dataset.
   gene_map <- tibble::tibble(
-    l2g_gene_id   = human_genes$gene_id,
+    l2g_gene_id = human_genes$gene_id,
     l2g_gene_name = human_genes$gene_name
-  ) %>% dplyr::distinct(l2g_gene_id, .keep_all = TRUE)
+  ) %>%
+    dplyr::distinct(l2g_gene_id, .keep_all = TRUE)
 
   result %>%
     dplyr::left_join(gene_map, by = "l2g_gene_id") %>%
@@ -935,17 +1129,17 @@ annotate_with_l2g.tbl_df <- function(
   cli::cli_alert_info("Open Targets Platform release: {.strong {release}}")
 
   # 2. Cache paths.
-  l2g_cache <- file.path(cache_dir, sprintf("ot_%s_l2g",      release))
-  cs_cache  <- file.path(cache_dir, sprintf("ot_%s_cs_gwas",  release))
+  l2g_cache <- file.path(cache_dir, sprintf("ot_%s_l2g", release))
+  cs_cache <- file.path(cache_dir, sprintf("ot_%s_cs_gwas", release))
 
   is_complete <- function(d) file.exists(file.path(d, ".complete"))
   l2g_cached <- is_complete(l2g_cache)
-  cs_cached  <- is_complete(cs_cache)
+  cs_cached <- is_complete(cs_cache)
 
   if (l2g_cached && cs_cached) {
     cli::cli_alert_success("Using cached data from {.path {cache_dir}}")
     l2g_path <- l2g_cache
-    cs_path  <- cs_cache
+    cs_path <- cs_cache
   } else {
     # 3. Find the credibleSet table name on FTP.
     cli::cli_progress_step("Locating credibleSet table on Open Targets FTP")
@@ -953,16 +1147,23 @@ annotate_with_l2g.tbl_df <- function(
 
     # 4. Estimate download sizes.
     l2g_mb <- .ot_dir_size_mb("l2g_prediction", release)
-    cs_mb  <- .ot_dir_size_mb(cs_tbl, release)
+    cs_mb <- .ot_dir_size_mb(cs_tbl, release)
     l2g_size_str <- if (is.na(l2g_mb)) "~700 MB" else sprintf("%d MB", l2g_mb)
     # credibleSet index: only 3 columns via parquet column pruning (~2% of full table)
-    cs_size_str <- if (is.na(cs_mb)) "size unknown (3-col extract)"
-                   else sprintf("~%d MB (3-col extract)", max(1L, round(cs_mb / 50L)))
+    cs_size_str <- if (is.na(cs_mb)) {
+      "size unknown (3-col extract)"
+    } else {
+      sprintf("~%d MB (3-col extract)", max(1L, round(cs_mb / 50L)))
+    }
 
     # 5. Show what will be downloaded and prompt.
     to_download <- c(
-      if (!l2g_cached) sprintf("L2G predictions      (%s)  →  %s", l2g_size_str, l2g_cache),
-      if (!cs_cached)  sprintf("credibleSet index    (%s)  →  %s", cs_size_str,  cs_cache)
+      if (!l2g_cached) {
+        sprintf("L2G predictions      (%s)  →  %s", l2g_size_str, l2g_cache)
+      },
+      if (!cs_cached) {
+        sprintf("credibleSet index    (%s)  →  %s", cs_size_str, cs_cache)
+      }
     )
     cli::cli_inform(c(
       "!" = "Open Targets Platform {.strong {release}} data not found in cache.",
@@ -990,15 +1191,18 @@ annotate_with_l2g.tbl_df <- function(
         .ot_httpfs_copy(.ot_remote_glob("l2g_prediction", release), l2g_cache)
       }
       if (!cs_cached) {
-        cli::cli_progress_step("Downloading credibleSet GWAS index ({cs_size_str})")
+        cli::cli_progress_step(
+          "Downloading credibleSet GWAS index ({cs_size_str})"
+        )
         .ot_httpfs_copy(
-          .ot_remote_glob(cs_tbl, release), cs_cache,
+          .ot_remote_glob(cs_tbl, release),
+          cs_cache,
           select_sql = "studyLocusId, variantId, studyType",
-          where_sql  = "studyType = 'gwas'"
+          where_sql = "studyType = 'gwas'"
         )
       }
       l2g_path <- l2g_cache
-      cs_path  <- cs_cache
+      cs_path <- cs_cache
     }
   }
 
@@ -1034,10 +1238,10 @@ query_ot_api_v2g = function(variant_id = "19_44908822_C_T") {
 
 genesForVariant <- function(variant_id) {
   na_row <- tibble::tibble(
-    ID            = variant_id,
-    l2g_gene_id   = NA_character_,
+    ID = variant_id,
+    l2g_gene_id = NA_character_,
     l2g_gene_name = NA_character_,
-    l2g_score     = NA_real_
+    l2g_score = NA_real_
   )
 
   # Helper: POST a GraphQL query to the OT Platform API and return parsed data.
@@ -1058,14 +1262,15 @@ genesForVariant <- function(variant_id) {
     )$data
   }
 
-  tryCatch({
-    # Normalise variant ID: strip leading chr prefix, handle : separator
-    normalised_id <- sub("^chr", "", variant_id)
-    normalised_id <- gsub(":", "_", normalised_id)
+  tryCatch(
+    {
+      # Normalise variant ID: strip leading chr prefix, handle : separator
+      normalised_id <- sub("^chr", "", variant_id)
+      normalised_id <- gsub(":", "_", normalised_id)
 
       if (grepl("^rs\\d+$", normalised_id, ignore.case = TRUE)) {
-      # Convert rsID to variant ID via Platform API search
-      query_searchid <- "query SearchQuery($queryString: String!, $index: Int!, $entityNames: [String!]!) {
+        # Convert rsID to variant ID via Platform API search
+        query_searchid <- "query SearchQuery($queryString: String!, $index: Int!, $entityNames: [String!]!) {
         search(queryString: $queryString, entityNames: $entityNames, page: {index: $index, size: 10}) {
           hits {
             object {
@@ -1074,33 +1279,35 @@ genesForVariant <- function(variant_id) {
           }
         }
       }"
-      id_result <- ot_post(query_searchid, list(
-        queryString = normalised_id,
-        index       = 0L,
-        entityNames = list("Variant")
-      ))
+        id_result <- ot_post(
+          query_searchid,
+          list(
+            queryString = normalised_id,
+            index = 0L,
+            entityNames = list("Variant")
+          )
+        )
 
-      # flatten=TRUE converts hits$object.{id,__typename} into top-level columns
-      hits <- id_result$search$hits
-      variant_rows <- hits[
-        !is.na(hits[["object.__typename"]]) &
-          hits[["object.__typename"]] == "Variant",
-      ]
+        # flatten=TRUE converts hits$object.{id,__typename} into top-level columns
+        hits <- id_result$search$hits
+        variant_rows <- hits[
+          !is.na(hits[["object.__typename"]]) &
+            hits[["object.__typename"]] == "Variant",
+        ]
 
-      if (nrow(variant_rows) == 0 || is.na(variant_rows[["object.id"]][1])) {
+        if (nrow(variant_rows) == 0 || is.na(variant_rows[["object.id"]][1])) {
+          return(na_row)
+        }
+        input_variant_id <- variant_rows[["object.id"]][1]
+      } else if (grepl("^\\d+_\\d+_[a-zA-Z]+_[a-zA-Z]+$", normalised_id)) {
+        input_variant_id <- normalised_id
+      } else {
+        cli::cli_warn("Unrecognised variant ID format: {variant_id}")
         return(na_row)
       }
-      input_variant_id <- variant_rows[["object.id"]][1]
 
-    } else if (grepl("^\\d+_\\d+_[a-zA-Z]+_[a-zA-Z]+$", normalised_id)) {
-      input_variant_id <- normalised_id
-    } else {
-      cli::cli_warn("Unrecognised variant ID format: {variant_id}")
-      return(na_row)
-    }
-
-    # Simplified query: locus subfield removed (was fetched but never used)
-    query <- "query GWASCredibleSetsQuery($variantId: String!, $size: Int!, $index: Int!) {
+      # Simplified query: locus subfield removed (was fetched but never used)
+      query <- "query GWASCredibleSetsQuery($variantId: String!, $size: Int!, $index: Int!) {
       variant(variantId: $variantId) {
         credibleSets(studyTypes: [gwas], page: { size: $size, index: $index }) {
           rows {
@@ -1115,51 +1322,68 @@ genesForVariant <- function(variant_id) {
       }
     }"
 
-    result <- ot_post(query, list(variantId = input_variant_id, size = 25L, index = 0L))
+      result <- ot_post(
+        query,
+        list(variantId = input_variant_id, size = 25L, index = 0L)
+      )
 
-    if (is.null(result$variant)) return(na_row)
-
-    cs_rows <- result$variant$credibleSets$rows
-    if (is.null(cs_rows) || length(cs_rows) == 0 ||
-        (is.data.frame(cs_rows) && nrow(cs_rows) == 0)) {
-      return(na_row)
-    }
-
-    # Aggregate L2G predictions across all credible sets
-    all_preds <- list()
-    for (i in seq_len(nrow(cs_rows))) {
-      l2g_rows <- cs_rows[["l2GPredictions.rows"]][[i]]
-      if (!is.null(l2g_rows) && is.data.frame(l2g_rows) && nrow(l2g_rows) > 0) {
-        all_preds[[length(all_preds) + 1]] <- tibble::tibble(
-          gene_id   = l2g_rows[["target.id"]],
-          gene_name = l2g_rows[["target.approvedSymbol"]],
-          l2g_score = l2g_rows[["score"]]
-        )
+      if (is.null(result$variant)) {
+        return(na_row)
       }
+
+      cs_rows <- result$variant$credibleSets$rows
+      if (
+        is.null(cs_rows) ||
+          length(cs_rows) == 0 ||
+          (is.data.frame(cs_rows) && nrow(cs_rows) == 0)
+      ) {
+        return(na_row)
+      }
+
+      # Aggregate L2G predictions across all credible sets
+      all_preds <- list()
+      for (i in seq_len(nrow(cs_rows))) {
+        l2g_rows <- cs_rows[["l2GPredictions.rows"]][[i]]
+        if (
+          !is.null(l2g_rows) && is.data.frame(l2g_rows) && nrow(l2g_rows) > 0
+        ) {
+          all_preds[[length(all_preds) + 1]] <- tibble::tibble(
+            gene_id = l2g_rows[["target.id"]],
+            gene_name = l2g_rows[["target.approvedSymbol"]],
+            l2g_score = l2g_rows[["score"]]
+          )
+        }
+      }
+
+      if (length(all_preds) == 0) {
+        return(na_row)
+      }
+
+      # Dedup: keep max score per gene (not first-encountered)
+      combined <- dplyr::bind_rows(all_preds)
+      best <- dplyr::group_by(combined, gene_id)
+      best <- dplyr::slice_max(best, l2g_score, n = 1, with_ties = FALSE)
+      best <- dplyr::ungroup(best)
+      best <- dplyr::arrange(best, dplyr::desc(l2g_score))
+
+      if (nrow(best) == 0) {
+        return(na_row)
+      }
+
+      tibble::tibble(
+        ID = variant_id,
+        l2g_gene_id = best$gene_id[[1]],
+        l2g_gene_name = best$gene_name[[1]],
+        l2g_score = best$l2g_score[[1]]
+      )
+    },
+    error = function(e) {
+      cli::cli_warn(
+        "genesForVariant failed for {variant_id}: {conditionMessage(e)}"
+      )
+      na_row
     }
-
-    if (length(all_preds) == 0) return(na_row)
-
-    # Dedup: keep max score per gene (not first-encountered)
-    combined <- dplyr::bind_rows(all_preds)
-    best <- dplyr::group_by(combined, gene_id)
-    best <- dplyr::slice_max(best, l2g_score, n = 1, with_ties = FALSE)
-    best <- dplyr::ungroup(best)
-    best <- dplyr::arrange(best, dplyr::desc(l2g_score))
-
-    if (nrow(best) == 0) return(na_row)
-
-    tibble::tibble(
-      ID            = variant_id,
-      l2g_gene_id   = best$gene_id[[1]],
-      l2g_gene_name = best$gene_name[[1]],
-      l2g_score     = best$l2g_score[[1]]
-    )
-
-  }, error = function(e) {
-    cli::cli_warn("genesForVariant failed for {variant_id}: {conditionMessage(e)}")
-    na_row
-  })
+  )
 }
 
 #' Query Open Targets Platform API for variant information
@@ -1219,10 +1443,16 @@ query_ot_api_variants <- function(variant_id = "19_44908822_C_T") {
       )
 
       # Normalize variant IDs like "chr1:123_A_T" -> "1_123_A_T"
-      normalized_variant_id <- gsub(":", "_", sub("^chr", "", variant_id, ignore.case = TRUE))
+      normalized_variant_id <- gsub(
+        ":",
+        "_",
+        sub("^chr", "", variant_id, ignore.case = TRUE)
+      )
 
       # Check variant id format
-      if (grepl(pattern = "^rs\\d+$", normalized_variant_id, ignore.case = TRUE)) {
+      if (
+        grepl(pattern = "^rs\\d+$", normalized_variant_id, ignore.case = TRUE)
+      ) {
         # Convert rs id to variant id using new Platform API search
         query_searchid <- "query SearchQuery($queryString: String!, $index: Int!, $entityNames: [String!]!) {
         search(
@@ -1247,11 +1477,14 @@ query_ot_api_variants <- function(variant_id = "19_44908822_C_T") {
         }
       }"
 
-        id_result <- ot_post(query_searchid, list(
-          queryString = normalized_variant_id,
-          index       = 0L,
-          entityNames = list("Variant")
-        ))
+        id_result <- ot_post(
+          query_searchid,
+          list(
+            queryString = normalized_variant_id,
+            index = 0L,
+            entityNames = list("Variant")
+          )
+        )
 
         variant_hits <- id_result$search$hits
         if (!is.data.frame(variant_hits) || nrow(variant_hits) == 0) {
@@ -1259,29 +1492,43 @@ query_ot_api_variants <- function(variant_id = "19_44908822_C_T") {
         }
 
         # flatten=TRUE usually produces object.__typename / object.id columns.
-        if ("object.__typename" %in% names(variant_hits) &&
-            "object.id" %in% names(variant_hits)) {
+        if (
+          "object.__typename" %in%
+            names(variant_hits) &&
+            "object.id" %in% names(variant_hits)
+        ) {
           variant_objects <- variant_hits[
             !is.na(variant_hits[["object.__typename"]]) &
               variant_hits[["object.__typename"]] == "Variant",
             ,
             drop = FALSE
           ]
-          if (nrow(variant_objects) == 0 || is.na(variant_objects[["object.id"]][1])) {
+          if (
+            nrow(variant_objects) == 0 ||
+              is.na(variant_objects[["object.id"]][1])
+          ) {
             stop(paste("No variant found for rsID:", normalized_variant_id))
           }
           input_variant_id <- variant_objects[["object.id"]][1]
         } else if ("id" %in% names(variant_hits)) {
           # Fallback for alternate flattening behavior.
           candidate <- variant_hits[["id"]][1]
-          if (is.na(candidate) || !grepl("^\\d+_\\d+_[A-Za-z]+_[A-Za-z]+$", candidate)) {
+          if (
+            is.na(candidate) ||
+              !grepl("^\\d+_\\d+_[A-Za-z]+_[A-Za-z]+$", candidate)
+          ) {
             stop(paste("No variant found for rsID:", normalized_variant_id))
           }
           input_variant_id <- candidate
         } else {
           stop(paste("No variant found for rsID:", normalized_variant_id))
         }
-      } else if (grepl(pattern = "^\\d+_\\d+_[a-zA-Z]+_[a-zA-Z]+$", normalized_variant_id)) {
+      } else if (
+        grepl(
+          pattern = "^\\d+_\\d+_[a-zA-Z]+_[a-zA-Z]+$",
+          normalized_variant_id
+        )
+      ) {
         input_variant_id <- normalized_variant_id
       } else {
         stop("\nPlease provide a variant ID")
@@ -1347,9 +1594,15 @@ query_ot_api_variants <- function(variant_id = "19_44908822_C_T") {
           }
 
           if (is.data.frame(tc_df) && nrow(tc_df) > 0) {
-            if (!"distanceFromTss" %in% names(tc_df)) tc_df$distanceFromTss <- NA_real_
-            if (!"target.approvedSymbol" %in% names(tc_df)) tc_df$target.approvedSymbol <- NA_character_
-            if (!"target.id" %in% names(tc_df)) tc_df$target.id <- NA_character_
+            if (!"distanceFromTss" %in% names(tc_df)) {
+              tc_df$distanceFromTss <- NA_real_
+            }
+            if (!"target.approvedSymbol" %in% names(tc_df)) {
+              tc_df$target.approvedSymbol <- NA_character_
+            }
+            if (!"target.id" %in% names(tc_df)) {
+              tc_df$target.id <- NA_character_
+            }
 
             dist <- suppressWarnings(abs(as.numeric(tc_df$distanceFromTss)))
             dist[is.na(dist)] <- Inf
@@ -1358,7 +1611,9 @@ query_ot_api_variants <- function(variant_id = "19_44908822_C_T") {
             if (length(min_dist_idx) == 1 && is.finite(dist[min_dist_idx])) {
               nearest_gene_symbol <- tc_df$target.approvedSymbol[[min_dist_idx]]
               nearest_gene_id <- tc_df$target.id[[min_dist_idx]]
-              nearest_gene_distance <- as.numeric(tc_df$distanceFromTss[[min_dist_idx]])
+              nearest_gene_distance <- as.numeric(tc_df$distanceFromTss[[
+                min_dist_idx
+              ]])
             }
           }
         }
@@ -1380,20 +1635,40 @@ query_ot_api_variants <- function(variant_id = "19_44908822_C_T") {
           }
 
           if (is.data.frame(af_df) && nrow(af_df) > 0) {
-            if (!"populationName" %in% names(af_df)) af_df$populationName <- NA_character_
-            if (!"alleleFrequency" %in% names(af_df)) af_df$alleleFrequency <- NA_real_
+            if (!"populationName" %in% names(af_df)) {
+              af_df$populationName <- NA_character_
+            }
+            if (!"alleleFrequency" %in% names(af_df)) {
+              af_df$alleleFrequency <- NA_real_
+            }
 
             if (any(grepl("NFE", af_df$populationName, ignore.case = TRUE))) {
-              gnomad_nfe <- af_df$alleleFrequency[grepl("NFE", af_df$populationName, ignore.case = TRUE)][1]
+              gnomad_nfe <- af_df$alleleFrequency[grepl(
+                "NFE",
+                af_df$populationName,
+                ignore.case = TRUE
+              )][1]
             }
             if (any(grepl("AFR", af_df$populationName, ignore.case = TRUE))) {
-              gnomad_afr <- af_df$alleleFrequency[grepl("AFR", af_df$populationName, ignore.case = TRUE)][1]
+              gnomad_afr <- af_df$alleleFrequency[grepl(
+                "AFR",
+                af_df$populationName,
+                ignore.case = TRUE
+              )][1]
             }
             if (any(grepl("AMR", af_df$populationName, ignore.case = TRUE))) {
-              gnomad_amr <- af_df$alleleFrequency[grepl("AMR", af_df$populationName, ignore.case = TRUE)][1]
+              gnomad_amr <- af_df$alleleFrequency[grepl(
+                "AMR",
+                af_df$populationName,
+                ignore.case = TRUE
+              )][1]
             }
             if (any(grepl("EAS", af_df$populationName, ignore.case = TRUE))) {
-              gnomad_eas <- af_df$alleleFrequency[grepl("EAS", af_df$populationName, ignore.case = TRUE)][1]
+              gnomad_eas <- af_df$alleleFrequency[grepl(
+                "EAS",
+                af_df$populationName,
+                ignore.case = TRUE
+              )][1]
             }
           }
         }

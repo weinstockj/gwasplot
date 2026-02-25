@@ -1,0 +1,94 @@
+---
+title: "Basic GWAS Plots"
+vignette: >
+  %\VignetteIndexEntry{Basic GWAS Plots}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+gwasplot provides fast Manhattan and QQ plots for GWAS summary statistics.
+This vignette walks through the core plotting workflow using simulated data —
+no real GWAS files or DuckDB connections required.
+
+## Simulate data
+
+The helper below generates a data frame with standard columns `CHROM`, `POS`,
+and `PVALUE`, distributing variants proportionally across chromosomes and
+optionally injecting genome-wide significant signals.
+
+```{r simulate}
+library(gwasplot)
+
+# Approximate chromosome sizes (Mb, hg38)
+chr_mb <- c(249, 242, 198, 190, 181, 171, 159, 145, 138, 134,
+            135, 133, 115, 107, 102,  90,  83,  80,  59,  63, 47, 51)
+
+sim_gwas <- function(n_total, hits = NULL,
+                     chroms = paste0("chr", 1:22)) {
+  sizes <- chr_mb[seq_along(chroms)]
+  dfs <- Map(function(ch, mb) {
+    n <- max(1L, round(n_total * mb / sum(sizes)))
+    data.frame(
+      CHROM  = ch,
+      POS    = sort(sample.int(mb * 1e6L, n)),
+      PVALUE = runif(n)
+    )
+  }, chroms, sizes)
+  df <- do.call(rbind, dfs)
+  for (h in hits) {
+    idx <- df$CHROM == h$chrom & abs(df$POS - h$pos) < h$window
+    df$PVALUE[idx] <- runif(sum(idx), h$pmin, h$pmax)
+  }
+  df
+}
+
+set.seed(42)
+gwas_df <- sim_gwas(
+  n_total = 500000,
+  hits = list(
+    list(chrom = "chr2",  pos = 135e6, window = 5e5, pmin = 1e-15, pmax = 1e-8),
+    list(chrom = "chr5",  pos =  50e6, window = 5e5, pmin = 1e-12, pmax = 1e-8),
+    list(chrom = "chr11", pos =  70e6, window = 5e5, pmin = 1e-20, pmax = 1e-8),
+    list(chrom = "chr17", pos =  30e6, window = 5e5, pmin = 1e-10, pmax = 1e-8)
+  )
+)
+
+head(gwas_df)
+```
+
+## Genomic inflation factor
+
+`lambda_gc()` computes the genomic inflation factor from the PVALUE column.
+A value close to 1 indicates well-controlled test statistics.
+
+```{r lambda}
+lambda_gc(gwas_df)
+```
+
+## QQ plot
+
+`qqplot()` accepts a numeric vector of p-values and returns a ggplot object,
+which renders inline in the document.
+
+```{r qqplot, fig.width=5, fig.height=5}
+qqplot(gwas_df$PVALUE)
+```
+
+## Manhattan plot
+
+`manhattan()` saves the plot to a file via `ggsave`. Pass `width`, `height`,
+and `dpi` through `...` to control output dimensions.
+
+```{r manhattan, fig.alt="Manhattan plot of simulated GWAS data"}
+outfile <- knitr::fig_path(".png")
+dir.create(dirname(outfile), showWarnings = FALSE, recursive = TRUE)
+manhattan(gwas_df, output = outfile, width = 10, height = 4, dpi = 150, base_size = 14)
+knitr::include_graphics(outfile)
+```
+
+The four injected signals on chromosomes 2, 5, 11, and 17 are clearly visible
+above the genome-wide significance threshold (−log₁₀ p ≈ 7.3).

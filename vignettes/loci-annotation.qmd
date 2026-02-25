@@ -1,0 +1,105 @@
+---
+title: "Identifying Independent Loci"
+vignette: >
+  %\VignetteIndexEntry{Identifying Independent Loci}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+After association testing it is common to identify a small set of independent
+signals from a larger pool of genome-wide significant variants.
+`identify_loci()` uses a greedy, distance-based algorithm: it picks the most
+significant variant as a locus lead, assigns all variants within a specified
+window to that locus, then repeats on the remaining unassigned variants.
+
+## Simulate data with signal clusters
+
+The simulation places three tight clusters of significant variants on
+chromosomes 1, 3, and 4.
+
+```{r simulate}
+library(gwasplot)
+
+# Approximate chromosome sizes (Mb, hg38)
+chr_mb <- c(249, 242, 198, 190, 181, 171, 159, 145, 138, 134,
+            135, 133, 115, 107, 102,  90,  83,  80,  59,  63, 47, 51)
+
+sim_gwas <- function(n_total, hits = NULL,
+                     chroms = paste0("chr", 1:22)) {
+  sizes <- chr_mb[seq_along(chroms)]
+  dfs <- Map(function(ch, mb) {
+    n <- max(1L, round(n_total * mb / sum(sizes)))
+    data.frame(
+      CHROM  = ch,
+      POS    = sort(sample.int(mb * 1e6L, n)),
+      PVALUE = runif(n)
+    )
+  }, chroms, sizes)
+  df <- do.call(rbind, dfs)
+  for (h in hits) {
+    idx <- df$CHROM == h$chrom & abs(df$POS - h$pos) < h$window
+    df$PVALUE[idx] <- runif(sum(idx), h$pmin, h$pmax)
+  }
+  df
+}
+
+set.seed(123)
+gwas_df <- sim_gwas(
+  n_total = 100000,
+  chroms  = paste0("chr", 1:5),
+  hits    = list(
+    list(chrom = "chr1", pos = 100e6, window = 2e6, pmin = 1e-20, pmax = 1e-8),
+    list(chrom = "chr3", pos =  60e6, window = 2e6, pmin = 1e-15, pmax = 1e-8),
+    list(chrom = "chr4", pos =  80e6, window = 2e6, pmin = 1e-12, pmax = 1e-8)
+  )
+)
+
+nrow(gwas_df)
+```
+
+## Filter to genome-wide significant hits
+
+`select_top_hits()` filters rows to those below a p-value threshold
+(default 5×10⁻⁸).
+
+```{r top-hits}
+top_hits <- select_top_hits(gwas_df, threshold = 5e-8)
+nrow(top_hits)
+```
+
+## Identify independent loci
+
+`identify_loci()` adds two columns to the filtered data:
+
+- `locus_id` — integer locus index (1, 2, 3, …)
+- `is_lead` — `TRUE` for the most significant variant in each locus
+
+```{r loci}
+loci <- identify_loci(top_hits, window_kb = 500)
+head(loci)
+```
+
+## Lead variant table
+
+Filtering to lead variants gives one row per independent signal.
+
+```{r leads}
+leads <- loci |>
+  dplyr::filter(is_lead) |>
+  dplyr::select(locus_id, CHROM, POS, PVALUE)
+
+leads
+```
+
+The three signals on chromosomes 1, 3, and 4 are recovered as expected.
+
+## Adding gene annotations
+
+When working with a DuckDB-backed `GWASFormatter` object,
+`find_nearest_gene()` can annotate each variant with its closest gene,
+adding `gene_name`, `gene_id`, and `distance` columns.
+See `?find_nearest_gene` for details.

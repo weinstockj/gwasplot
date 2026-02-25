@@ -37,6 +37,7 @@ Imports:
     tibble,
     tidyr
 RoxygenNote: 7.3.3
+VignetteBuilder: quarto
 LinkingTo: 
     Rcpp
 Depends: 

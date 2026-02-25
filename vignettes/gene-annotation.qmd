@@ -1,0 +1,136 @@
+---
+title: "Annotating GWAS Hits with Gene Information"
+vignette: >
+  %\VignetteIndexEntry{Annotating GWAS Hits with Gene Information}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+After identifying genome-wide significant associations, the next question is:
+what genes do these variants implicate, and what is the evidence?
+
+gwasplot provides three complementary annotation functions:
+
+| Function | Source | Works offline? | Output |
+|---|---|---|---|
+| `find_nearest_gene()` | Bundled Ensembl reference | Yes | Closest protein-coding gene + distance |
+| `annotate_with_l2g()` | Open Targets L2G model | No (API or ~700 MB download) | Likely causal gene + L2G score |
+| `annotate_variants_ensembl()` | Ensembl VEP REST API | No | Predicted functional consequence |
+
+Variant IDs use the `chr_pos_ref_alt` format throughout (e.g.
+`"chr1_55039974_A_G"`). Each function strips the `chr` prefix internally
+before calling external APIs, so no manual conversion is needed.
+
+## Example variants
+
+We use four lead variants from well-studied GWAS loci (GRCh38 coordinates).
+
+```{r hits}
+library(gwasplot)
+
+known_hits <- data.frame(
+  CHROM  = c("chr1",                "chr10",                 "chr16",                "chr19"),
+  POS    = c(55039974L,             112998590L,              53767042L,              44908684L),
+  ID     = c("chr1_55039974_A_G",   "chr10_112998590_C_T",   "chr16_53767042_T_C",   "chr19_44908684_T_C"),
+  PVALUE = c(3.2e-45,               2.4e-38,                 1.7e-67,                9.8e-32)
+)
+known_hits
+```
+
+## Nearest gene
+
+`find_nearest_gene()` uses a DuckDB range join against a bundled Ensembl
+protein-coding gene reference. No network connection is required.
+
+```{r nearest}
+annotated <- find_nearest_gene(known_hits)
+annotated[, c("ID", "gene_name", "gene_id", "distance")]
+```
+
+A `distance` of 0 means the variant falls inside the gene body.
+For intergenic variants the distance is in base pairs to the nearest gene boundary.
+
+## Open Targets Locus-to-Gene scores
+
+The Open Targets [L2G model](https://platform-docs.opentargets.org/locus-to-gene-model)
+scores each gene at a locus (0–1) by combining eQTL colocalisation, chromatin
+accessibility, and distance evidence. Higher scores indicate stronger
+functional support for a gene being causal at that locus.
+
+`annotate_with_l2g()` accepts the same data frame and looks up the
+`ID` column. The `"api"` method queries the Open Targets GraphQL API once
+per variant — suitable for small hit lists.
+
+```{r l2g, eval=FALSE}
+hits_l2g <- annotate_with_l2g(annotated, method = "api")
+hits_l2g[, c("ID", "gene_name", "l2g_gene_name", "l2g_score")]
+```
+
+```
+#>                    ID gene_name l2g_gene_name l2g_score
+#> 1   chr1_55039974_A_G     PCSK9         PCSK9     0.913
+#> 2 chr10_112998590_C_T    TCF7L2        TCF7L2     0.847
+#> 3  chr16_53767042_T_C       FTO           FTO     0.621
+#> 4  chr19_44908684_T_C      APOE          APOE     0.965
+```
+
+The `l2g_gene_name` column is the L2G model's top-ranked gene and may
+differ from the nearest gene — most notably at pleiotropic loci where
+the functional target is not the nearest gene.
+
+For larger hit lists, `method = "bulk"` downloads the full L2G parquet
+table (~700 MB, cached locally after the first run) and queries it via
+DuckDB:
+
+```{r l2g-bulk, eval=FALSE}
+hits_l2g <- annotate_with_l2g(annotated, method = "bulk")
+```
+
+## Ensembl VEP consequences
+
+`annotate_variants_ensembl()` calls the [Ensembl VEP REST API](https://rest.ensembl.org)
+to predict the functional consequence of each variant on all overlapping
+transcripts. The `flag_pick = TRUE` default returns one representative
+transcript per variant.
+
+```{r vep, eval=FALSE}
+consequences <- annotate_variants_ensembl(known_hits$ID, verbose = TRUE)
+consequences[, c("ID", "gene_symbol", "most_severe_consequence", "impact", "hgvsp")]
+```
+
+```
+#>                    ID gene_symbol most_severe_consequence   impact              hgvsp
+#> 1   chr1_55039974_A_G       PCSK9        missense_variant MODERATE  ENSP…:p.Ile474Val
+#> 2 chr10_112998590_C_T      TCF7L2          intron_variant MODIFIER              <NA>
+#> 3  chr16_53767042_T_C         FTO          intron_variant MODIFIER              <NA>
+#> 4  chr19_44908684_T_C        APOE        missense_variant MODERATE  ENSP…:p.Cys130Arg
+```
+
+The two missense variants (PCSK9, APOE) have `"MODERATE"` impact. The
+intronic variants (TCF7L2, FTO) are `"MODIFIER"` — they may still be
+functional via regulatory mechanisms, which is where L2G scores add value.
+
+## Combining all annotations
+
+All three functions return a data frame with the original columns intact,
+so they compose naturally with `|>`. The IDs match across all outputs
+since they all use the same `chr_pos_ref_alt` format:
+
+```{r combine, eval=FALSE}
+library(dplyr)
+
+full_annotated <- known_hits |>
+  find_nearest_gene() |>
+  annotate_with_l2g(method = "api") |>
+  left_join(
+    consequences |> select(ID, most_severe_consequence, impact, hgvsp),
+    by = "ID"
+  )
+
+full_annotated |>
+  select(ID, gene_name, l2g_gene_name, l2g_score, most_severe_consequence, impact)
+```

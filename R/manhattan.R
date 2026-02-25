@@ -157,7 +157,8 @@ create_manhattan_plot = function(prepared_data, axis_data, pvalue_threshold = 5e
                                  italic_gene_labels = TRUE,
                                  highlight_genes = NULL,
                                  highlight_color = "red3",
-                                 label_color = "black") {
+                                 label_color = "black",
+                                 base_size = 7) {
   label_strategy <- match.arg(label_strategy)
 
   p = ggplot2::ggplot(prepared_data, aes(x=POScum, y=-log10(PVALUE))) +
@@ -180,12 +181,12 @@ create_manhattan_plot = function(prepared_data, axis_data, pvalue_threshold = 5e
     # Custom the theme:
     ggplot2::geom_hline(yintercept = -log10(pvalue_threshold), linetype = "dashed", color = "grey") +
     ggplot2::labs(y = expression(-log[10](pvalue))) +
-    ggplot2::theme_bw(base_size = 7, base_family = "Helvetica") +
+    ggplot2::theme_bw(base_size = base_size, base_family = "Helvetica") +
     ggplot2::theme(
       legend.position="none",
       axis.title.x = element_blank(),
-      axis.text.x = element_text(size = 3),
-      axis.text.y = element_text(size = 5),
+      axis.text.x = element_text(size = base_size * 3 / 7),
+      axis.text.y = element_text(size = base_size * 5 / 7),
       panel.grid.major.x = element_blank(),
       panel.grid.minor.x = element_blank(),
       panel.grid.major.y = element_blank(),
@@ -307,7 +308,8 @@ manhattan.tbl_df = function(gwas, output, lower_logp_threshold = 3.0, label_top_
 manhattan.data.frame = function(gwas, output, lower_logp_threshold = 3.0, label_top_n = NULL,
                                 label_strategy = "lead_per_locus", label_locus_window_kb = 500,
                                 italic_gene_labels = TRUE, highlight_genes = NULL,
-                                highlight_color = "red3", label_color = "black", ...) {
+                                highlight_color = "red3", label_color = "black",
+                                base_size = 7, ...) {
   log_info("Now preparing to plot")
 
   # Create chromosome lookup
@@ -330,7 +332,8 @@ manhattan.data.frame = function(gwas, output, lower_logp_threshold = 3.0, label_
     italic_gene_labels = italic_gene_labels,
     highlight_genes = highlight_genes,
     highlight_color = highlight_color,
-    label_color = label_color
+    label_color = label_color,
+    base_size = base_size
   )
 
   # Save plot
@@ -341,7 +344,8 @@ manhattan.data.frame = function(gwas, output, lower_logp_threshold = 3.0, label_
 manhattan.GWASFormatter = function(gwas, output, lower_logp_threshold = 3.0, label_top_n = NULL,
                                    label_strategy = "lead_per_locus", label_locus_window_kb = 500,
                                    italic_gene_labels = TRUE, highlight_genes = NULL,
-                                   highlight_color = "red3", label_color = "black", ...) {
+                                   highlight_color = "red3", label_color = "black",
+                                   base_size = 7, ...) {
   log_info("Now preparing to plot")
 
   # Create chromosome lookup and copy to database connection
@@ -369,7 +373,8 @@ manhattan.GWASFormatter = function(gwas, output, lower_logp_threshold = 3.0, lab
                             italic_gene_labels = italic_gene_labels,
                             highlight_genes = highlight_genes,
                             highlight_color = highlight_color,
-                            label_color = label_color)
+                            label_color = label_color,
+                            base_size = base_size)
 
   # Save plot
   save_manhattan_plot(p, output, ...)
