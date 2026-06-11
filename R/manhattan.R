@@ -235,6 +235,7 @@ create_manhattan_plot = function(
   label_strategy = c("top_n", "lead_per_locus"),
   label_locus_window_kb = 500,
   label_pvalue_threshold = NULL,
+  label_nudge_y = NULL,
   italic_gene_labels = TRUE,
   highlight_genes = NULL,
   highlight_color = "red3",
@@ -246,6 +247,13 @@ create_manhattan_plot = function(
   # Default the labeling cutoff to the genome-wide significance line.
   if (is.null(label_pvalue_threshold)) {
     label_pvalue_threshold <- pvalue_threshold
+  }
+
+  # Default upward nudge for gene labels: a small fraction of the plotted y-range
+  # so labels lift off their points regardless of overall signal strength.
+  if (is.null(label_nudge_y)) {
+    y_top <- max(-log10(prepared_data$PVALUE), na.rm = TRUE)
+    label_nudge_y <- 0.04 * y_top
   }
 
   p = ggplot2::ggplot(prepared_data, aes(x = POScum, y = -log10(PVALUE))) +
@@ -321,6 +329,12 @@ create_manhattan_plot = function(
           size = 3,
           max.overlaps = Inf,
           seed = 42,
+          # Lift labels upward and repel only along y so each gene name sits in a
+          # band directly above its variant rather than overlapping the points.
+          nudge_y = label_nudge_y,
+          direction = "y",
+          point.padding = 0.3,
+          box.padding = 0.4,
           segment.size = 0.25,
           segment.alpha = 0.65,
           segment.color = "grey35",
@@ -400,6 +414,10 @@ save_manhattan_plot = function(plot, output, ...) {
 #'   `PVALUE < label_pvalue_threshold` are eligible for labels (genes in
 #'   `highlight_genes` are always labeled regardless). Default NULL, which uses
 #'   the genome-wide significance line (5e-8).
+#' @param label_nudge_y Vertical distance (in `-log10(p)` units) to lift gene
+#'   labels above their points; labels are repelled along the y-axis only so
+#'   each name sits directly above its variant. Default NULL, which uses 4% of
+#'   the plotted y-range. Set to 0 to disable the upward nudge.
 #' @param italic_gene_labels Logical. If TRUE, gene labels are italicized; cytoband
 #'   fallback labels remain plain text. Default TRUE.
 #' @param highlight_genes Optional character vector of gene symbols to highlight
@@ -417,6 +435,7 @@ manhattan = function(
   label_strategy = "lead_per_locus",
   label_locus_window_kb = 500,
   label_pvalue_threshold = NULL,
+  label_nudge_y = NULL,
   italic_gene_labels = TRUE,
   highlight_genes = NULL,
   highlight_color = "red3",
@@ -435,6 +454,7 @@ manhattan.tbl_df = function(
   label_strategy = "lead_per_locus",
   label_locus_window_kb = 500,
   label_pvalue_threshold = NULL,
+  label_nudge_y = NULL,
   italic_gene_labels = TRUE,
   highlight_genes = NULL,
   highlight_color = "red3",
@@ -449,6 +469,7 @@ manhattan.tbl_df = function(
     label_strategy = label_strategy,
     label_locus_window_kb = label_locus_window_kb,
     label_pvalue_threshold = label_pvalue_threshold,
+    label_nudge_y = label_nudge_y,
     italic_gene_labels = italic_gene_labels,
     highlight_genes = highlight_genes,
     highlight_color = highlight_color,
@@ -466,6 +487,7 @@ manhattan.data.frame = function(
   label_strategy = "lead_per_locus",
   label_locus_window_kb = 500,
   label_pvalue_threshold = NULL,
+  label_nudge_y = NULL,
   italic_gene_labels = TRUE,
   highlight_genes = NULL,
   highlight_color = "red3",
@@ -494,6 +516,7 @@ manhattan.data.frame = function(
     label_strategy = label_strategy,
     label_locus_window_kb = label_locus_window_kb,
     label_pvalue_threshold = label_pvalue_threshold,
+    label_nudge_y = label_nudge_y,
     italic_gene_labels = italic_gene_labels,
     highlight_genes = highlight_genes,
     highlight_color = highlight_color,
@@ -514,6 +537,7 @@ manhattan.GWASFormatter = function(
   label_strategy = "lead_per_locus",
   label_locus_window_kb = 500,
   label_pvalue_threshold = NULL,
+  label_nudge_y = NULL,
   italic_gene_labels = TRUE,
   highlight_genes = NULL,
   highlight_color = "red3",
@@ -555,6 +579,7 @@ manhattan.GWASFormatter = function(
     label_strategy = label_strategy,
     label_locus_window_kb = label_locus_window_kb,
     label_pvalue_threshold = label_pvalue_threshold,
+    label_nudge_y = label_nudge_y,
     italic_gene_labels = italic_gene_labels,
     highlight_genes = highlight_genes,
     highlight_color = highlight_color,

@@ -12,6 +12,7 @@ manhattan(
   label_strategy = "lead_per_locus",
   label_locus_window_kb = 500,
   label_pvalue_threshold = NULL,
+  label_nudge_y = NULL,
   italic_gene_labels = TRUE,
   highlight_genes = NULL,
   highlight_color = "red3",
@@ -40,6 +41,11 @@ or `"lead_per_locus"` (one lead per locus, then top N). Default `"lead_per_locus
 `PVALUE < label_pvalue_threshold` are eligible for labels (genes in
 `highlight_genes` are always labeled regardless). Default NULL, which uses
 the genome-wide significance line (5e-8).}
+
+\item{label_nudge_y}{Vertical distance (in `-log10(p)` units) to lift gene
+labels above their points; labels are repelled along the y-axis only so
+each name sits directly above its variant. Default NULL, which uses 4% of
+the plotted y-range. Set to 0 to disable the upward nudge.}
 
 \item{italic_gene_labels}{Logical. If TRUE, gene labels are italicized; cytoband
 fallback labels remain plain text. Default TRUE.}

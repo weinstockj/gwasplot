@@ -2,6 +2,10 @@
 
 ## Changed
 
+- `manhattan()` gene labels are now lifted above their points and repelled along
+  the y-axis only, so each name sits directly above its variant instead of
+  overlapping the points. The lift is controlled by the new `label_nudge_y`
+  argument (default: 4% of the plotted y-range; set to 0 to disable).
 - `qqplot()` now renders with a fixed square panel (`aspect.ratio`, default 1)
   instead of `coord_equal()`. A strong GWAS with very large observed
   `-log10(p)` no longer stretches the plot into a tall, thin rectangle. Pass
