@@ -9,6 +9,11 @@
 
 ## Added
 
+- Added `keep = "union"` to `meta_analyze_fe()`. The default `"overlap"` keeps
+  only variants present in both studies; `"union"` keeps variants present in
+  either study, passing single-study variants through with that study's estimate
+  and `N_studies = 1` (`matched_by` of `"x_only"` / `"y_only"`). Supported for
+  `GWASFormatter` (DuckDB full join), `data.frame`, and `tibble` inputs.
 - Added `write_summary_statistics()` to persist a (filtered) summary-statistic
   object to Parquet or CSV. For a `GWASFormatter` the write streams directly
   from DuckDB without collecting into R, capturing filters applied via
