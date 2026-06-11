@@ -61,18 +61,10 @@ lambda_gc.GWASFormatter <- function(x, ...) {
 #' @param g A GWASFormatter object.
 #' @param rows The number of rows to sample. Default is 100.
 compute_sample = function(g, rows = 100L) {
-<<<<<<< HEAD
-  sql <- dbplyr::sql(glue::glue(
-    "SELECT * FROM ({dbplyr::remote_query(g$data)}) USING SAMPLE {rows}"
-  ))
-  df <- DBI::dbGetQuery(g$con, sql)
-=======
-
   df = DBI::dbGetQuery(
     g$con,
     glue("SELECT * FROM {g$table_name} USING SAMPLE {rows}")
   )
->>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
 
   df
 }

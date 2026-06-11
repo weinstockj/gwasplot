@@ -196,7 +196,6 @@
   return(p)
 }
 
-<<<<<<< HEAD
 #' QQ plot for GWAS p-values
 #'
 #' An S3 generic that accepts a GWASFormatter object, data.frame/tibble, or a
@@ -228,28 +227,6 @@ qqplot.GWASFormatter <- function(
 ) {
   pvals <- x$data %>% dplyr::pull(PVALUE)
   plt <- .make_qqplot(pvals, ...)
-=======
-#' Save a QQ plot of GWAS p-values
-#' 
-#' @param gwas A gwas object containing the p-values to plot.
-#' @param output_prefix The prefix for the output file name.
-#' @param width Width of the output figure in inches.
-#' @param height Height of the output figure in inches.
-#' @param dpi DPI of the output figure.
-#' @return NULL
-qqplot_save = function(gwas, output_prefix, width = 5, height = 5, dpi = 300) {
-  log_info("Creating QQ plot")
-  fname <- glue::glue("{output_prefix}_qqplot.png")
-
-  p_values <- gwas$data %>%
-    dplyr::select(PVALUE) %>%
-    dplyr::collect(.) %>%
-    dplyr::pull(PVALUE)
-  
-  # Create and save the plot
-  p <- qqplot(p_values)
-  
->>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
   ggplot2::ggsave(
     output,
     plt,
@@ -293,4 +270,17 @@ qqplot.data.frame <- function(
 #' @export
 qqplot.default <- function(x, output, ...) {
   .make_qqplot(x, ...)
+}
+
+#' Save a QQ plot of GWAS p-values
+#'
+#' @param gwas A gwas object containing the p-values to plot.
+#' @param output_prefix The prefix for the output file name.
+#' @param width Width of the output figure in inches.
+#' @param height Height of the output figure in inches.
+#' @param dpi DPI of the output figure.
+#' @return Invisibly returns the ggplot object.
+qqplot_save = function(gwas, output_prefix, width = 5, height = 5, dpi = 300) {
+  output = glue::glue("{output_prefix}_qqplot.png")
+  qqplot(gwas, output = output, width = width, height = height, dpi = dpi)
 }
