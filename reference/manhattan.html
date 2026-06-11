@@ -52,6 +52,7 @@
 <span>  label_top_n <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  label_strategy <span class="op">=</span> <span class="st">"lead_per_locus"</span>,</span>
 <span>  label_locus_window_kb <span class="op">=</span> <span class="fl">500</span>,</span>
+<span>  label_pvalue_threshold <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  italic_gene_labels <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  highlight_genes <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  highlight_color <span class="op">=</span> <span class="st">"red3"</span>,</span>
@@ -90,6 +91,13 @@ or `"lead_per_locus"` (one lead per locus, then top N). Default `"lead_per_locus
 <dt id="arg-label-locus-window-kb">label_locus_window_kb<a class="anchor" aria-label="anchor" href="#arg-label-locus-window-kb"></a></dt>
 <dd><p>Locus window size in kilobases used when
 `label_strategy = "lead_per_locus"`. Default 500.</p></dd>
+
+
+<dt id="arg-label-pvalue-threshold">label_pvalue_threshold<a class="anchor" aria-label="anchor" href="#arg-label-pvalue-threshold"></a></dt>
+<dd><p>P-value cutoff for labeling: only variants with
+`PVALUE &lt; label_pvalue_threshold` are eligible for labels (genes in
+`highlight_genes` are always labeled regardless). Default NULL, which uses
+the genome-wide significance line (5e-8).</p></dd>
 
 
 <dt id="arg-italic-gene-labels">italic_gene_labels<a class="anchor" aria-label="anchor" href="#arg-italic-gene-labels"></a></dt>

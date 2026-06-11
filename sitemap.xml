@@ -1,5 +1,7 @@
 <urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
 <url><loc>https://weinstocklab.github.io/gwasplot/404.html</loc></url>
+<url><loc>https://weinstocklab.github.io/gwasplot/AGENTS.html</loc></url>
+<url><loc>https://weinstocklab.github.io/gwasplot/CLAUDE.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/LICENSE.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/articles/basic-plots.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/articles/gene-annotation.html</loc></url>
@@ -44,5 +46,6 @@
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/search_cell_types.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/select_top_hits.html</loc></url>
 <url><loc>https://weinstocklab.github.io/gwasplot/reference/volcano.html</loc></url>
+<url><loc>https://weinstocklab.github.io/gwasplot/reference/write_summary_statistics.html</loc></url>
 </urlset>
 

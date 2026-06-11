@@ -40,8 +40,16 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="development version" id="gwasplot-development-version">gwasplot (development version)<a class="anchor" aria-label="anchor" href="#gwasplot-development-version"></a></h2>
-<ul><li>No notable changes yet.</li>
+<div class="section level3">
+<h3 id="fixed-development-version">Fixed<a class="anchor" aria-label="anchor" href="#fixed-development-version"></a></h3>
+<ul><li>Fixed <code><a href="../reference/manhattan.html">manhattan()</a></code> labeling variants that do not clear genome-wide significance. Labels are now gated to variants passing the significance threshold (default 5e-8), so <code>label_top_n</code> labels up to N <em>significant</em> hits rather than always labeling exactly N points down to <code>lower_logp_threshold</code>.</li>
 </ul></div>
+<div class="section level3">
+<h3 id="added-development-version">Added<a class="anchor" aria-label="anchor" href="#added-development-version"></a></h3>
+<ul><li>Added <code><a href="../reference/write_summary_statistics.html">write_summary_statistics()</a></code> to persist a (filtered) summary-statistic object to Parquet or CSV. For a <code>GWASFormatter</code> the write streams directly from DuckDB without collecting into R, capturing filters applied via <code><a href="../reference/filter_variants.html">filter_variants()</a></code> / <code><a href="../reference/exclude_difficult_regions.html">exclude_difficult_regions()</a></code>; <code>data.frame</code> and <code>tibble</code> inputs are supported via a temporary in-memory DuckDB connection.</li>
+<li>Added <code>label_pvalue_threshold</code> to <code><a href="../reference/manhattan.html">manhattan()</a></code> to control the labeling cutoff independently of the plotted points; defaults to the genome-wide significance line. Genes listed in <code>highlight_genes</code> are always labeled regardless of this threshold.</li>
+</ul></div>
+</div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.2.0" id="gwasplot-020">gwasplot 0.2.0<a class="anchor" aria-label="anchor" href="#gwasplot-020"></a></h2>
 <div class="section level3">
