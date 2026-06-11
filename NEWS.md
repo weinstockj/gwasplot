@@ -1,6 +1,18 @@
 # gwasplot (development version)
 
-- No notable changes yet.
+## Fixed
+
+- Fixed `manhattan()` labeling variants that do not clear genome-wide
+  significance. Labels are now gated to variants passing the significance
+  threshold (default 5e-8), so `label_top_n` labels up to N *significant* hits
+  rather than always labeling exactly N points down to `lower_logp_threshold`.
+
+## Added
+
+- Added `label_pvalue_threshold` to `manhattan()` to control the labeling
+  cutoff independently of the plotted points; defaults to the genome-wide
+  significance line. Genes listed in `highlight_genes` are always labeled
+  regardless of this threshold.
 
 # gwasplot 0.2.0
 

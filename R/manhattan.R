@@ -108,15 +108,29 @@ as_plotmath_label = function(text, italic = FALSE) {
 # Select points to label and build label text/expression metadata.
 select_label_points = function(prepared_data, label_top_n, label_strategy = c("top_n", "lead_per_locus"),
                                label_locus_window_kb = 500, highlight_genes = NULL,
-                               italic_gene_labels = TRUE) {
+                               italic_gene_labels = TRUE, label_pvalue_threshold = 5e-8) {
   if (is.null(label_top_n) || label_top_n <= 0) {
     return(NULL)
   }
 
   label_strategy <- match.arg(label_strategy)
 
+  # Only label variants that clear the significance threshold. Highlighted genes
+  # bypass the gate so an explicitly requested gene is always labeled.
+  has_gene_col <- "gene_name" %in% names(prepared_data)
+  is_highlight_row <- if (has_gene_col && !is.null(highlight_genes)) {
+    !is.na(prepared_data$gene_name) & prepared_data$gene_name %in% highlight_genes
+  } else {
+    rep(FALSE, nrow(prepared_data))
+  }
+
   candidates <- prepared_data %>%
+    dplyr::filter(PVALUE < label_pvalue_threshold | is_highlight_row) %>%
     dplyr::arrange(PVALUE)
+
+  if (nrow(candidates) == 0) {
+    return(NULL)
+  }
 
   if (label_strategy == "lead_per_locus" && nrow(candidates) > 0) {
     candidates <- identify_loci.data.frame(
@@ -127,8 +141,19 @@ select_label_points = function(prepared_data, label_top_n, label_strategy = c("t
       dplyr::filter(is_lead)
   }
 
-  label_df <- candidates %>%
+  # Top N by p-value, but always keep explicitly highlighted genes even if they
+  # would otherwise rank below the cutoff.
+  candidate_highlight <- if (has_gene_col && !is.null(highlight_genes)) {
+    !is.na(candidates$gene_name) & candidates$gene_name %in% highlight_genes
+  } else {
+    rep(FALSE, nrow(candidates))
+  }
+
+  top_df <- candidates %>%
     dplyr::slice_min(PVALUE, n = label_top_n, with_ties = FALSE)
+  highlight_df <- candidates[candidate_highlight, , drop = FALSE]
+
+  label_df <- dplyr::distinct(dplyr::bind_rows(top_df, highlight_df))
 
   if (nrow(label_df) == 0) {
     return(NULL)
@@ -159,12 +184,18 @@ create_manhattan_plot = function(prepared_data, axis_data, pvalue_threshold = 5e
                                  y_max_cap = 300, label_top_n = NULL,
                                  label_strategy = c("top_n", "lead_per_locus"),
                                  label_locus_window_kb = 500,
+                                 label_pvalue_threshold = NULL,
                                  italic_gene_labels = TRUE,
                                  highlight_genes = NULL,
                                  highlight_color = "red3",
                                  label_color = "black",
                                  base_size = 7) {
   label_strategy <- match.arg(label_strategy)
+
+  # Default the labeling cutoff to the genome-wide significance line.
+  if (is.null(label_pvalue_threshold)) {
+    label_pvalue_threshold <- pvalue_threshold
+  }
 
   p = ggplot2::ggplot(prepared_data, aes(x=POScum, y=-log10(PVALUE))) +
     # Show all points
@@ -209,7 +240,8 @@ create_manhattan_plot = function(prepared_data, axis_data, pvalue_threshold = 5e
         label_strategy = label_strategy,
         label_locus_window_kb = label_locus_window_kb,
         highlight_genes = highlight_genes,
-        italic_gene_labels = italic_gene_labels
+        italic_gene_labels = italic_gene_labels,
+        label_pvalue_threshold = label_pvalue_threshold
       )
 
       if (!is.null(label_df) && nrow(label_df) > 0) {
@@ -275,6 +307,10 @@ save_manhattan_plot = function(plot, output, ...) {
 #'   or `"lead_per_locus"` (one lead per locus, then top N). Default `"lead_per_locus"`.
 #' @param label_locus_window_kb Locus window size in kilobases used when
 #'   `label_strategy = "lead_per_locus"`. Default 500.
+#' @param label_pvalue_threshold P-value cutoff for labeling: only variants with
+#'   `PVALUE < label_pvalue_threshold` are eligible for labels (genes in
+#'   `highlight_genes` are always labeled regardless). Default NULL, which uses
+#'   the genome-wide significance line (5e-8).
 #' @param italic_gene_labels Logical. If TRUE, gene labels are italicized; cytoband
 #'   fallback labels remain plain text. Default TRUE.
 #' @param highlight_genes Optional character vector of gene symbols to highlight
@@ -286,6 +322,7 @@ save_manhattan_plot = function(plot, output, ...) {
 #' @export
 manhattan = function(gwas, output, lower_logp_threshold = 3.0, label_top_n = NULL,
                      label_strategy = "lead_per_locus", label_locus_window_kb = 500,
+                     label_pvalue_threshold = NULL,
                      italic_gene_labels = TRUE, highlight_genes = NULL,
                      highlight_color = "red3", label_color = "black", ...) {
   UseMethod("manhattan")
@@ -294,6 +331,7 @@ manhattan = function(gwas, output, lower_logp_threshold = 3.0, label_top_n = NUL
 #' @export
 manhattan.tbl_df = function(gwas, output, lower_logp_threshold = 3.0, label_top_n = NULL,
                             label_strategy = "lead_per_locus", label_locus_window_kb = 500,
+                            label_pvalue_threshold = NULL,
                             italic_gene_labels = TRUE, highlight_genes = NULL,
                             highlight_color = "red3", label_color = "black", ...) {
   manhattan.data.frame(
@@ -301,6 +339,7 @@ manhattan.tbl_df = function(gwas, output, lower_logp_threshold = 3.0, label_top_
     label_top_n = label_top_n,
     label_strategy = label_strategy,
     label_locus_window_kb = label_locus_window_kb,
+    label_pvalue_threshold = label_pvalue_threshold,
     italic_gene_labels = italic_gene_labels,
     highlight_genes = highlight_genes,
     highlight_color = highlight_color,
@@ -312,6 +351,7 @@ manhattan.tbl_df = function(gwas, output, lower_logp_threshold = 3.0, label_top_
 #' @export
 manhattan.data.frame = function(gwas, output, lower_logp_threshold = 3.0, label_top_n = NULL,
                                 label_strategy = "lead_per_locus", label_locus_window_kb = 500,
+                                label_pvalue_threshold = NULL,
                                 italic_gene_labels = TRUE, highlight_genes = NULL,
                                 highlight_color = "red3", label_color = "black",
                                 base_size = 7, ...) {
@@ -334,6 +374,7 @@ manhattan.data.frame = function(gwas, output, lower_logp_threshold = 3.0, label_
     label_top_n = label_top_n,
     label_strategy = label_strategy,
     label_locus_window_kb = label_locus_window_kb,
+    label_pvalue_threshold = label_pvalue_threshold,
     italic_gene_labels = italic_gene_labels,
     highlight_genes = highlight_genes,
     highlight_color = highlight_color,
@@ -348,6 +389,7 @@ manhattan.data.frame = function(gwas, output, lower_logp_threshold = 3.0, label_
 #' @export
 manhattan.GWASFormatter = function(gwas, output, lower_logp_threshold = 3.0, label_top_n = NULL,
                                    label_strategy = "lead_per_locus", label_locus_window_kb = 500,
+                                   label_pvalue_threshold = NULL,
                                    italic_gene_labels = TRUE, highlight_genes = NULL,
                                    highlight_color = "red3", label_color = "black",
                                    base_size = 7, ...) {
@@ -373,6 +415,7 @@ manhattan.GWASFormatter = function(gwas, output, lower_logp_threshold = 3.0, lab
                             label_top_n = label_top_n,
                             label_strategy = label_strategy,
                             label_locus_window_kb = label_locus_window_kb,
+                            label_pvalue_threshold = label_pvalue_threshold,
                             italic_gene_labels = italic_gene_labels,
                             highlight_genes = highlight_genes,
                             highlight_color = highlight_color,

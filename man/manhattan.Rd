@@ -11,6 +11,7 @@ manhattan(
   label_top_n = NULL,
   label_strategy = "lead_per_locus",
   label_locus_window_kb = 500,
+  label_pvalue_threshold = NULL,
   italic_gene_labels = TRUE,
   highlight_genes = NULL,
   highlight_color = "red3",
@@ -34,6 +35,11 @@ or `"lead_per_locus"` (one lead per locus, then top N). Default `"lead_per_locus
 
 \item{label_locus_window_kb}{Locus window size in kilobases used when
 `label_strategy = "lead_per_locus"`. Default 500.}
+
+\item{label_pvalue_threshold}{P-value cutoff for labeling: only variants with
+`PVALUE < label_pvalue_threshold` are eligible for labels (genes in
+`highlight_genes` are always labeled regardless). Default NULL, which uses
+the genome-wide significance line (5e-8).}
 
 \item{italic_gene_labels}{Logical. If TRUE, gene labels are italicized; cytoband
 fallback labels remain plain text. Default TRUE.}
