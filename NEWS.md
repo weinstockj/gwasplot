@@ -9,6 +9,11 @@
 
 ## Added
 
+- Added `write_summary_statistics()` to persist a (filtered) summary-statistic
+  object to Parquet or CSV. For a `GWASFormatter` the write streams directly
+  from DuckDB without collecting into R, capturing filters applied via
+  `filter_variants()` / `exclude_difficult_regions()`; `data.frame` and
+  `tibble` inputs are supported via a temporary in-memory DuckDB connection.
 - Added `label_pvalue_threshold` to `manhattan()` to control the labeling
   cutoff independently of the plotted points; defaults to the genome-wide
   significance line. Genes listed in `highlight_genes` are always labeled
