@@ -25,7 +25,9 @@ or a numeric vector (or list of numeric vectors) of p-values.}
 \item{output}{Path for the saved plot file (required for object methods).}
 
 \item{...}{Additional arguments passed to the underlying `.make_qqplot()`
-(e.g. `should.thin`, `draw.conf`, `point.color`).}
+(e.g. `should.thin`, `draw.conf`, `point.color`, `aspect.ratio`). The panel
+is rendered with a fixed `aspect.ratio` (default 1, i.e. square) so a strong
+GWAS no longer stretches the plot into a tall rectangle.}
 
 \item{width}{Plot width in inches. Default 5.}
 

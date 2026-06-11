@@ -14,6 +14,7 @@
   point.size = 1.5,
   point.alpha = 0.7,
   point.color = "#3366FF",
+  aspect.ratio = 1,
   ...
 ) {
   # Error checking
@@ -174,12 +175,19 @@
       linetype = "dashed"
     )
 
-  # Adjust theme and appearance
+  # Adjust theme and appearance.
+  #
+  # We force a square panel via `aspect.ratio` rather than `coord_equal()`. With
+  # `coord_equal()` one y-unit equals one x-unit, so a strong GWAS (observed
+  # -log10(p) in the tens or hundreds) against the bounded expected axis (~7-8)
+  # stretched the panel into a tall, thin rectangle. A fixed aspect ratio keeps
+  # the panel square at any signal strength; the y = x reference line is still
+  # drawn (it simply no longer sits at a literal 45 degrees).
   p <- p +
     ggplot2::theme_bw(base_size = 12, base_family = "Helvetica") +
-    ggplot2::coord_equal() +
     ggplot2::labs(x = xlab, y = ylab) +
     ggplot2::theme(
+      aspect.ratio = aspect.ratio,
       panel.grid.minor = ggplot2::element_blank(),
       panel.grid.major = ggplot2::element_line(
         color = "lightgray",
@@ -210,7 +218,9 @@
 #' @param height Plot height in inches. Default 5.
 #' @param dpi Plot resolution. Default 300.
 #' @param ... Additional arguments passed to the underlying `.make_qqplot()`
-#'   (e.g. `should.thin`, `draw.conf`, `point.color`).
+#'   (e.g. `should.thin`, `draw.conf`, `point.color`, `aspect.ratio`). The panel
+#'   is rendered with a fixed `aspect.ratio` (default 1, i.e. square) so a strong
+#'   GWAS no longer stretches the plot into a tall rectangle.
 #' @return Invisibly returns the ggplot object.
 #' @export
 qqplot <- function(x, output, ...) UseMethod("qqplot")

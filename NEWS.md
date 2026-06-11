@@ -1,5 +1,13 @@
 # gwasplot (development version)
 
+## Changed
+
+- `qqplot()` now renders with a fixed square panel (`aspect.ratio`, default 1)
+  instead of `coord_equal()`. A strong GWAS with very large observed
+  `-log10(p)` no longer stretches the plot into a tall, thin rectangle. Pass
+  `aspect.ratio` to adjust. The y = x reference line is still drawn but no
+  longer sits at a literal 45 degrees.
+
 ## Fixed
 
 - Fixed `manhattan()` labeling variants that do not clear genome-wide
