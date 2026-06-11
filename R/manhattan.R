@@ -18,29 +18,11 @@ create_chrom_lookup = function() {
 prepare_manhattan_data = function(gwas_data, chrom_lookup, lower_logp_threshold = 3.0) {
   scaling = 1e8
 
-<<<<<<< HEAD
-  # Preserve gene_name if present
-  extra_cols <- intersect("gene_name", colnames(gwas_data))
-  base_cols  <- c("CHROM", "POS", "PVALUE")
-  all_cols   <- c(base_cols, extra_cols)
+  extra_cols = intersect("gene_name", colnames(gwas_data))
+  base_cols = c("CHROM", "POS", "PVALUE")
 
-  # Compute chromosome positions and cumulative coordinates
-  prepared = gwas_data %>%
-    dplyr::select(dplyr::all_of(base_cols)) %>%
-    dplyr::inner_join(chrom_lookup, by = "CHROM") %>%
-    # Compute chromosome size
-    dplyr::group_by(CHROM_index, CHROM) %>%
-    dplyr::summarise(chr_len = (max(POS) - min(POS)) / scaling) %>%
-    dplyr::ungroup(.) %>%
-    # Calculate cumulative start position of each chromosome
-    dplyr::arrange(CHROM_index) %>%
-    dplyr::mutate(tot = cumsum(chr_len) - chr_len) %>%
-    # Add this info to the initial dataset
-    dplyr::right_join(gwas_data %>% dplyr::select(dplyr::all_of(all_cols)), by = "CHROM") %>%
-    # Add a cumulative position of each SNP
-=======
   base_data = gwas_data %>%
-    dplyr::select(CHROM, POS, PVALUE) %>%
+    dplyr::select(dplyr::all_of(c(base_cols, extra_cols))) %>%
     dplyr::inner_join(chrom_lookup, by = "CHROM")
 
   chrom_offsets = base_data %>%
@@ -59,11 +41,9 @@ prepare_manhattan_data = function(gwas_data, chrom_lookup, lower_logp_threshold 
       dplyr::arrange(CHROM_index) %>%
       dplyr::mutate(tot = cumsum(chr_len) - chr_len)
   }
-  
-  # Compute chromosome positions and cumulative coordinates
+
   prepared = base_data %>%
     dplyr::inner_join(chrom_offsets, by = c("CHROM_index", "CHROM")) %>%
->>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
     dplyr::arrange(CHROM_index, POS) %>%
     dplyr::mutate(POScum = POS / scaling + tot) %>%
     dplyr::filter(-log10(PVALUE) > lower_logp_threshold)
@@ -374,34 +354,18 @@ manhattan.GWASFormatter = function(gwas, output, lower_logp_threshold = 3.0, lab
   log_info("Now preparing to plot")
 
   # Create chromosome lookup and copy to database connection
-<<<<<<< HEAD
-  chrom_lookup = create_chrom_lookup() %>%
-    dplyr::copy_to(gwas$con, ., "chrom_lookup", overwrite = TRUE)
-
-  # Prepare data (includes gene_name if present in gwas$data)
-  prepared = prepare_manhattan_data(gwas$data, chrom_lookup, lower_logp_threshold)
-
-  # Calculate axis positions and collect from database
-  axis = calculate_axis_positions(prepared) %>%
-    dplyr::collect(.)
-
-=======
   chrom_lookup = copy_to_if_missing(gwas$con, create_chrom_lookup(), "chrom_lookup")
   
   # Prepare data
   prepared = prepare_manhattan_data(gwas$data, chrom_lookup, lower_logp_threshold)
   
->>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
   # Collect prepared data from database
   prepared = prepared %>%
     dplyr::collect(.)
 
-<<<<<<< HEAD
-=======
   # Calculate axis positions after collecting the prepared points once
   axis = calculate_axis_positions(prepared)
-  
->>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
+
   log_info(glue("Done preparing to plot {nrow(prepared)} SNPs."))
 
   # Create plot (no y_max_cap for GWASFormatter to avoid pmin issue with database)

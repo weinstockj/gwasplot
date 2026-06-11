@@ -36,16 +36,11 @@ Imports:
     stringr,
     tibble,
     tidyr
-<<<<<<< HEAD
-RoxygenNote: 7.3.3
 Suggests:
-    quarto
-VignetteBuilder: quarto
-=======
-Suggests:
+    quarto,
     testthat (>= 3.0.0)
-RoxygenNote: 7.3.2
->>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
+VignetteBuilder: quarto
+RoxygenNote: 7.3.3
 LinkingTo: 
     Rcpp
 Depends: 
