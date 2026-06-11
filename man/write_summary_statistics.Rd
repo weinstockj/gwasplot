@@ -35,9 +35,9 @@ The path to the written file, invisibly.
 }
 \description{
 Write a (possibly filtered) summary-statistic object to a Parquet
-or CSV file. For a `GWASFormatter`, the write streams directly from DuckDB
-without collecting into R, so it scales to large data and captures whatever
-filtering has been applied (e.g. via [filter_variants()] or
-[exclude_difficult_regions()]). `data.frame` and `tibble` inputs are written
-through a temporary in-memory DuckDB connection.
+  or CSV file. For a `GWASFormatter`, the write streams directly from DuckDB
+  without collecting into R, so it scales to large data and captures whatever
+  filtering has been applied (e.g. via [filter_variants()] or
+  [exclude_difficult_regions()]). `data.frame` and `tibble` inputs are written
+  through a temporary in-memory DuckDB connection.
 }

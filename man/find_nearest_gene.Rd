@@ -6,9 +6,9 @@
 \alias{find_nearest_gene.tbl_df}
 \title{Find the nearest gene for variants}
 \usage{
-find_nearest_gene(x, ...)
+find_nearest_gene(x, threshold = 1e+05, pvalue_threshold = NULL, ...)
 
-\method{find_nearest_gene}{GWASFormatter}(x, threshold = 1e+05, ...)
+\method{find_nearest_gene}{GWASFormatter}(x, threshold = 1e+05, pvalue_threshold = NULL, ...)
 
 \method{find_nearest_gene}{tbl_df}(
   x,
@@ -16,15 +16,16 @@ find_nearest_gene(x, ...)
   chrom_col = "CHROM",
   pos_col = "POS",
   id_col = "ID",
+  pvalue_threshold = NULL,
   ...
 )
 }
 \arguments{
 \item{x}{A gwas object or tibble containing variant data.}
 
-\item{...}{Additional arguments passed to methods.}
-
 \item{threshold}{The distance threshold to consider a gene as nearest. Default is 1e5.}
+
+\item{...}{Additional arguments passed to methods.}
 
 \item{chrom_col}{Name of the column containing chromosome information. Default is "CHROM".}
 
