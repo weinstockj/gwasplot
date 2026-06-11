@@ -7,8 +7,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>High Performance GWAS Plotting And Annotation • gwasplot</title>
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<link href="deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
-<script src="deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
+<link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
+<script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="High Performance GWAS Plotting And Annotation">
 <meta name="description" content="More about what it does (maybe more than one line). Continuation lines should be indented.">
@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">gwasplot</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.1.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -40,6 +40,7 @@
     <li><a class="dropdown-item" href="articles/loci-annotation.html">Identifying Independent Loci</a></li>
   </ul>
 </li>
+<li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
@@ -99,7 +100,7 @@
 <span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a><span class="sc">$</span> SE        <span class="sc">&lt;</span>dbl<span class="sc">&gt;</span> <span class="fl">0.0730887</span>, <span class="fl">0.0479369</span>, <span class="fl">0.0540183</span>, <span class="fl">0.0646778</span>, <span class="fl">0.1213880</span></span>
 <span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a><span class="sc">$</span> CHISQ     <span class="sc">&lt;</span>dbl<span class="sc">&gt;</span> <span class="fl">0.000464077</span>, <span class="fl">1.817850000</span>, <span class="fl">1.426620000</span>, <span class="fl">0.186990000</span>, <span class="fl">0.030108</span>…</span>
 <span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a><span class="sc">$</span> LOG10P    <span class="sc">&lt;</span>dbl<span class="sc">&gt;</span> <span class="fl">0.00752913</span>, <span class="fl">0.75063100</span>, <span class="fl">0.63391900</span>, <span class="fl">0.17689500</span>, <span class="fl">0.06437000</span></span></code></pre></div>
-<p>gwastools will read in data from either regenie or saige and standarize the column names, and then create a table called <code>summary_stats</code> in a <code>duckdb</code> database.</p>
+<p>gwasplot will read in data from either regenie or saige, standardize the column names, and then materialize each <code>GWASFormatter</code> object into its own DuckDB-backed table. This allows multiple GWAS objects to coexist in the same working directory without overwriting one another.</p>
 </div>
 </div>
 <div class="section level1">
@@ -142,25 +143,43 @@
 - <strong>Immunoglobulin loci</strong>: <code><a href="reference/annotate_with_immunoglobulin.html">annotate_with_immunoglobulin()</a></code> - flags variants in Ig heavy/light chain regions</p>
 </div>
 <div class="section level2">
+<h2 id="meta-analysis">Meta-analysis<a class="anchor" aria-label="anchor" href="#meta-analysis"></a>
+</h2>
+<p>Combine two standardized GWAS datasets with inverse-variance fixed-effects meta-analysis:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">study1</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/reformat_summary_statistics.html">reformat_summary_statistics</a></span><span class="op">(</span><span class="st">"study1.parquet"</span><span class="op">)</span></span>
+<span><span class="va">study2</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/reformat_summary_statistics.html">reformat_summary_statistics</a></span><span class="op">(</span><span class="st">"study2.parquet"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">meta_gwas</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/meta_analyze_fe.html">meta_analyze_fe</a></span><span class="op">(</span><span class="va">study1</span>, <span class="va">study2</span><span class="op">)</span></span></code></pre></div>
+<p>Current behavior: - keeps only the harmonized overlap between the two studies - supports simple <code>REF</code>/<code>ALT</code> swaps by flipping the second study’s <code>BETA</code> - returns standard GWAS columns such as <code>CHROM</code>, <code>POS</code>, <code>REF</code>, <code>ALT</code>, <code>ID</code>, <code>BETA</code>, <code>SE</code>, and <code>PVALUE</code> - runs inside DuckDB when both inputs are <code>GWASFormatter</code> objects</p>
+<p>Because the meta-analysis result uses the standard GWAS schema, it can flow directly into existing helpers:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">meta_hits</span> <span class="op">&lt;-</span> <span class="va">meta_gwas</span> <span class="op"><a href="reference/pipe.html">%&gt;%</a></span></span>
+<span>  <span class="fu"><a href="reference/select_top_hits.html">select_top_hits</a></span><span class="op">(</span>threshold <span class="op">=</span> <span class="fl">5e-8</span><span class="op">)</span> <span class="op"><a href="reference/pipe.html">%&gt;%</a></span></span>
+<span>  <span class="fu"><a href="reference/find_nearest_gene.html">find_nearest_gene</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="reference/manhattan.html">manhattan</a></span><span class="op">(</span><span class="va">meta_gwas</span>, output <span class="op">=</span> <span class="st">"meta_analysis.manhattan.pdf"</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
 <h2 id="visualization">Visualization<a class="anchor" aria-label="anchor" href="#visualization"></a>
 </h2>
 <div class="section level3">
 <h3 id="manhattan-plots">Manhattan Plots<a class="anchor" aria-label="anchor" href="#manhattan-plots"></a>
 </h3>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu"><a href="reference/manhattan.html">manhattan</a></span><span class="op">(</span>gwas <span class="op">=</span> <span class="va">gwas_stats</span>, output_prefix <span class="op">=</span> <span class="st">"my_manhattan"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="qq-plots">QQ Plots<a class="anchor" aria-label="anchor" href="#qq-plots"></a>
 </h3>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="fu">qqplot_save</span><span class="op">(</span>gwas <span class="op">=</span> <span class="va">gwas_stats</span>, output_prefix <span class="op">=</span> <span class="st">"my_qqplot"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
 <h3 id="locuszoom-plots">LocusZoom Plots<a class="anchor" aria-label="anchor" href="#locuszoom-plots"></a>
 </h3>
 <p>Create detailed regional association plots with gene tracks:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Plot a specific locus with gene structure</span></span>
 <span><span class="fu"><a href="reference/locuszoom.html">locuszoom</a></span><span class="op">(</span><span class="va">gwas_stats</span>, locus_chr <span class="op">=</span> <span class="st">"chr2"</span>, locus_start <span class="op">=</span> <span class="fl">25000000</span>, locus_end <span class="op">=</span> <span class="fl">25500000</span><span class="op">)</span></span></code></pre></div>
 </div>
@@ -168,7 +187,7 @@
 <h3 id="volcano-plots">Volcano Plots<a class="anchor" aria-label="anchor" href="#volcano-plots"></a>
 </h3>
 <p>For post-GWAS analysis (e.g., after empirical Bayes shrinkage):</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Automatically uses lfsr if available, otherwise p-values</span></span>
 <span><span class="fu"><a href="reference/volcano.html">volcano</a></span><span class="op">(</span><span class="va">gwas_data</span>, phenotype_label <span class="op">=</span> <span class="st">"My Phenotype"</span><span class="op">)</span></span></code></pre></div>
 </div>
@@ -182,30 +201,31 @@
 <h2 id="basic-workflow">Basic Workflow<a class="anchor" aria-label="anchor" href="#basic-workflow"></a>
 </h2>
 <p>Reformat GWAS Summary Statistics Use the reformat_summary_statistics function to read and reformat GWAS summary statistics from a parquet or CSV file:</p>
-<div class="sourceCode" id="cb10"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" tabindex="-1"></a><span class="fu">library</span>(gwasplot)</span>
-<span id="cb10-2"><a href="#cb10-2" tabindex="-1"></a></span>
-<span id="cb10-3"><a href="#cb10-3" tabindex="-1"></a><span class="co"># Reformat summary statistics from a file</span></span>
-<span id="cb10-4"><a href="#cb10-4" tabindex="-1"></a>gwas_stats <span class="ot">&lt;-</span> <span class="fu">reformat_summary_statistics</span>(<span class="st">"path/to/your/file.parquet"</span>)</span>
-<span id="cb10-5"><a href="#cb10-5" tabindex="-1"></a><span class="fu">print</span>(gwas_stats)</span>
-<span id="cb10-6"><a href="#cb10-6" tabindex="-1"></a></span>
-<span id="cb10-7"><a href="#cb10-7" tabindex="-1"></a>GWAS object</span>
-<span id="cb10-8"><a href="#cb10-8" tabindex="-1"></a>File path<span class="sc">:</span> ..<span class="sc">/</span>concatenated_results.parquet</span>
-<span id="cb10-9"><a href="#cb10-9" tabindex="-1"></a>Detected format<span class="sc">:</span> regenie</span>
-<span id="cb10-10"><a href="#cb10-10" tabindex="-1"></a>Data names<span class="sc">:</span> CHROM, POS, ID, ALLELE0, ALLELE1, A1FREQ, N, BETA, SE, CHISQ, LOG10P, phenotype</span>
-<span id="cb10-11"><a href="#cb10-11" tabindex="-1"></a>Data preview<span class="sc">:</span></span>
-<span id="cb10-12"><a href="#cb10-12" tabindex="-1"></a><span class="co"># A tibble: 5 × 9</span></span>
-<span id="cb10-13"><a href="#cb10-13" tabindex="-1"></a>  CHROM      POS REF   ALT      AF_ALT     BETA  LOG10P PVALUE ID</span>
-<span id="cb10-14"><a href="#cb10-14" tabindex="-1"></a>  <span class="sc">&lt;</span>chr<span class="sc">&gt;</span>    <span class="er">&lt;</span>dbl<span class="sc">&gt;</span> <span class="er">&lt;</span>chr<span class="sc">&gt;</span> <span class="er">&lt;</span>chr<span class="sc">&gt;</span>     <span class="er">&lt;</span>dbl<span class="sc">&gt;</span>    <span class="er">&lt;</span>dbl<span class="sc">&gt;</span>   <span class="er">&lt;</span>dbl<span class="sc">&gt;</span>  <span class="er">&lt;</span>dbl<span class="sc">&gt;</span> <span class="er">&lt;</span>chr<span class="sc">&gt;</span></span>
-<span id="cb10-15"><a href="#cb10-15" tabindex="-1"></a><span class="dv">1</span> chr3  <span class="dv">90000011</span> T     C     <span class="fl">0.000138</span>  <span class="sc">-</span><span class="fl">0.00157</span> <span class="fl">0.00753</span>  <span class="fl">0.983</span> chr3_90000011_T_C</span>
-<span id="cb10-16"><a href="#cb10-16" tabindex="-1"></a><span class="dv">2</span> chr3  <span class="dv">90000261</span> GATT  G     <span class="fl">0.000291</span>  <span class="sc">-</span><span class="fl">0.0646</span>  <span class="fl">0.751</span>    <span class="fl">0.178</span> chr3_90000261_GA…</span>
-<span id="cb10-17"><a href="#cb10-17" tabindex="-1"></a><span class="dv">3</span> chr3  <span class="dv">90000274</span> T     A     <span class="fl">0.000238</span>  <span class="sc">-</span><span class="fl">0.0645</span>  <span class="fl">0.634</span>    <span class="fl">0.232</span> chr3_90000274_T_A</span>
-<span id="cb10-18"><a href="#cb10-18" tabindex="-1"></a><span class="dv">4</span> chr3  <span class="dv">90000324</span> C     A     <span class="fl">0.000163</span>   <span class="fl">0.0280</span>  <span class="fl">0.177</span>    <span class="fl">0.665</span> chr3_90000324_C_A</span>
-<span id="cb10-19"><a href="#cb10-19" tabindex="-1"></a><span class="dv">5</span> chr3  <span class="dv">90000366</span> T     G     <span class="fl">0.0000466</span> <span class="sc">-</span><span class="fl">0.0211</span>  <span class="fl">0.0644</span>   <span class="fl">0.862</span> chr3_90000366_T_G</span></code></pre></div>
+<div class="sourceCode" id="cb12"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" tabindex="-1"></a><span class="fu">library</span>(gwasplot)</span>
+<span id="cb12-2"><a href="#cb12-2" tabindex="-1"></a></span>
+<span id="cb12-3"><a href="#cb12-3" tabindex="-1"></a><span class="co"># Reformat summary statistics from a file</span></span>
+<span id="cb12-4"><a href="#cb12-4" tabindex="-1"></a>gwas_stats <span class="ot">&lt;-</span> <span class="fu">reformat_summary_statistics</span>(<span class="st">"path/to/your/file.parquet"</span>)</span>
+<span id="cb12-5"><a href="#cb12-5" tabindex="-1"></a><span class="fu">print</span>(gwas_stats)</span>
+<span id="cb12-6"><a href="#cb12-6" tabindex="-1"></a></span>
+<span id="cb12-7"><a href="#cb12-7" tabindex="-1"></a>GWAS object</span>
+<span id="cb12-8"><a href="#cb12-8" tabindex="-1"></a>File path<span class="sc">:</span> ..<span class="sc">/</span>concatenated_results.parquet</span>
+<span id="cb12-9"><a href="#cb12-9" tabindex="-1"></a>Table name<span class="sc">:</span> summary_stats_concatenated_results_ab12cd34</span>
+<span id="cb12-10"><a href="#cb12-10" tabindex="-1"></a>Detected format<span class="sc">:</span> regenie</span>
+<span id="cb12-11"><a href="#cb12-11" tabindex="-1"></a>Data names<span class="sc">:</span> CHROM, POS, ID, ALLELE0, ALLELE1, A1FREQ, N, BETA, SE, CHISQ, LOG10P, phenotype</span>
+<span id="cb12-12"><a href="#cb12-12" tabindex="-1"></a>Data preview<span class="sc">:</span></span>
+<span id="cb12-13"><a href="#cb12-13" tabindex="-1"></a><span class="co"># A tibble: 5 × 9</span></span>
+<span id="cb12-14"><a href="#cb12-14" tabindex="-1"></a>  CHROM      POS REF   ALT      AF_ALT     BETA  LOG10P PVALUE ID</span>
+<span id="cb12-15"><a href="#cb12-15" tabindex="-1"></a>  <span class="sc">&lt;</span>chr<span class="sc">&gt;</span>    <span class="er">&lt;</span>dbl<span class="sc">&gt;</span> <span class="er">&lt;</span>chr<span class="sc">&gt;</span> <span class="er">&lt;</span>chr<span class="sc">&gt;</span>     <span class="er">&lt;</span>dbl<span class="sc">&gt;</span>    <span class="er">&lt;</span>dbl<span class="sc">&gt;</span>   <span class="er">&lt;</span>dbl<span class="sc">&gt;</span>  <span class="er">&lt;</span>dbl<span class="sc">&gt;</span> <span class="er">&lt;</span>chr<span class="sc">&gt;</span></span>
+<span id="cb12-16"><a href="#cb12-16" tabindex="-1"></a><span class="dv">1</span> chr3  <span class="dv">90000011</span> T     C     <span class="fl">0.000138</span>  <span class="sc">-</span><span class="fl">0.00157</span> <span class="fl">0.00753</span>  <span class="fl">0.983</span> chr3_90000011_T_C</span>
+<span id="cb12-17"><a href="#cb12-17" tabindex="-1"></a><span class="dv">2</span> chr3  <span class="dv">90000261</span> GATT  G     <span class="fl">0.000291</span>  <span class="sc">-</span><span class="fl">0.0646</span>  <span class="fl">0.751</span>    <span class="fl">0.178</span> chr3_90000261_GA…</span>
+<span id="cb12-18"><a href="#cb12-18" tabindex="-1"></a><span class="dv">3</span> chr3  <span class="dv">90000274</span> T     A     <span class="fl">0.000238</span>  <span class="sc">-</span><span class="fl">0.0645</span>  <span class="fl">0.634</span>    <span class="fl">0.232</span> chr3_90000274_T_A</span>
+<span id="cb12-19"><a href="#cb12-19" tabindex="-1"></a><span class="dv">4</span> chr3  <span class="dv">90000324</span> C     A     <span class="fl">0.000163</span>   <span class="fl">0.0280</span>  <span class="fl">0.177</span>    <span class="fl">0.665</span> chr3_90000324_C_A</span>
+<span id="cb12-20"><a href="#cb12-20" tabindex="-1"></a><span class="dv">5</span> chr3  <span class="dv">90000366</span> T     G     <span class="fl">0.0000466</span> <span class="sc">-</span><span class="fl">0.0211</span>  <span class="fl">0.0644</span>   <span class="fl">0.862</span> chr3_90000366_T_G</span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="complete-analysis-pipeline">Complete Analysis Pipeline<a class="anchor" aria-label="anchor" href="#complete-analysis-pipeline"></a>
 </h2>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Load and reformat data</span></span>
 <span><span class="va">gwas_stats</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/reformat_summary_statistics.html">reformat_summary_statistics</a></span><span class="op">(</span><span class="st">"path/to/gwas_results.parquet"</span><span class="op">)</span></span>
 <span></span>
@@ -230,6 +250,21 @@
 <span></span>
 <span><span class="co"># Plot specific loci</span></span>
 <span><span class="fu"><a href="reference/locuszoom.html">locuszoom</a></span><span class="op">(</span><span class="va">gwas_clean</span>, locus_chr <span class="op">=</span> <span class="st">"chr2"</span>, locus_start <span class="op">=</span> <span class="fl">25000000</span>, locus_end <span class="op">=</span> <span class="fl">25500000</span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="two-study-meta-analysis-pipeline">Two-study Meta-analysis Pipeline<a class="anchor" aria-label="anchor" href="#two-study-meta-analysis-pipeline"></a>
+</h2>
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">study1</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/reformat_summary_statistics.html">reformat_summary_statistics</a></span><span class="op">(</span><span class="st">"path/to/study1.parquet"</span><span class="op">)</span></span>
+<span><span class="va">study2</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/reformat_summary_statistics.html">reformat_summary_statistics</a></span><span class="op">(</span><span class="st">"path/to/study2.parquet"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">meta_gwas</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/meta_analyze_fe.html">meta_analyze_fe</a></span><span class="op">(</span><span class="va">study1</span>, <span class="va">study2</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="reference/manhattan.html">manhattan</a></span><span class="op">(</span><span class="va">meta_gwas</span>, output <span class="op">=</span> <span class="st">"meta_analysis.manhattan.pdf"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">meta_top_hits</span> <span class="op">&lt;-</span> <span class="va">meta_gwas</span> <span class="op"><a href="reference/pipe.html">%&gt;%</a></span></span>
+<span>  <span class="fu"><a href="reference/select_top_hits.html">select_top_hits</a></span><span class="op">(</span>threshold <span class="op">=</span> <span class="fl">5e-8</span><span class="op">)</span> <span class="op"><a href="reference/pipe.html">%&gt;%</a></span></span>
+<span>  <span class="fu"><a href="reference/find_nearest_gene.html">find_nearest_gene</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="contact">Contact<a class="anchor" aria-label="anchor" href="#contact"></a>
