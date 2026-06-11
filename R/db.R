@@ -1,9 +1,13 @@
 #' Connect to DuckDB
 #' @param read_only Logical. If TRUE, the connection will be read-only.
 #' @return A DuckDB connection object.
-#' @export 
+#' @export
 db_connect = function(read_only = FALSE) {
-  con = DBI::dbConnect(duckdb::duckdb(), dbdir = "local.duckdb", read_only = read_only)
+  con = DBI::dbConnect(
+    duckdb::duckdb(),
+    dbdir = "local.duckdb",
+    read_only = read_only
+  )
 
   limit = getOption("duckdb_max_memory")
 
@@ -48,7 +52,10 @@ make_unique_table_name_ = function(stem, suffix = NULL, deterministic = FALSE) {
   table_stem = sanitize_table_name_(stem)
 
   if (!is.null(suffix)) {
-    table_stem = sanitize_table_name_(paste(table_stem, suffix, sep = "_"), table_stem)
+    table_stem = sanitize_table_name_(
+      paste(table_stem, suffix, sep = "_"),
+      table_stem
+    )
   }
 
   if (deterministic) {
@@ -66,10 +73,16 @@ make_gwas_table_name_ = function(file_path = NULL, use_cache = FALSE) {
     "summary_stats"
   }
 
-  make_unique_table_name_(paste("summary_stats", stem, sep = "_"), deterministic = use_cache)
+  make_unique_table_name_(
+    paste("summary_stats", stem, sep = "_"),
+    deterministic = use_cache
+  )
 }
 
-resolve_gwas_active_tbl_ = function(x, active_table = c("filtered_variants", "summary_stats")) {
+resolve_gwas_active_tbl_ = function(
+  x,
+  active_table = c("filtered_variants", "summary_stats")
+) {
   active_table = match.arg(active_table)
 
   if (active_table == "summary_stats") {

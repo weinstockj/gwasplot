@@ -8,41 +8,45 @@ filter_variants = function(x, subset = NULL, exclude = NULL, ...) {
 }
 
 #' @export
-filter_variants.GWASFormatter = function(x, subset = NULL, exclude = NULL, ...) {
+filter_variants.GWASFormatter = function(
+  x,
+  subset = NULL,
+  exclude = NULL,
+  ...
+) {
+  if (!is.null(subset) && !is.null(exclude)) {
+    cli::cli_abort("You cannot specify both subset and exclude arguments.")
+  }
 
-    if(!is.null(subset) && !is.null(exclude)) {
-        cli::cli_abort("You cannot specify both subset and exclude arguments.")
-    }
+  start_time <- Sys.time()
+  cli::cli_process_start("Filtering variants")
 
-    start_time <- Sys.time()
-    cli::cli_process_start("Filtering variants")
+  if (!is.null(subset)) {
+    whitelist = dplyr::tbl(x$con, glue::glue("read_parquet('{subset}')"))
 
-    if(!is.null(subset)) {
-        whitelist = dplyr::tbl(x$con, glue::glue("read_parquet('{subset}')"))
+    materialize_gwas_tbl_(
+      x,
+      dplyr::semi_join(x$data, whitelist, by = c("chrom", "pos", "ref", "alt")),
+      suffix = "filtered"
+    )
+  }
 
-      materialize_gwas_tbl_(
-        x,
-        dplyr::semi_join(x$data, whitelist, by = c("chrom", "pos", "ref", "alt")),
-        suffix = "filtered"
-      )
-    }
+  if (!is.null(exclude)) {
+    blacklist = dplyr::tbl(x$con, glue::glue("read_parquet('{exclude}')"))
 
-    if(!is.null(exclude)) {
-        blacklist = dplyr::tbl(x$con, glue::glue("read_parquet('{exclude}')"))
+    materialize_gwas_tbl_(
+      x,
+      dplyr::anti_join(x$data, blacklist, by = c("chrom", "pos", "ref", "alt")),
+      suffix = "filtered"
+    )
+  }
 
-      materialize_gwas_tbl_(
-        x,
-        dplyr::anti_join(x$data, blacklist, by = c("chrom", "pos", "ref", "alt")),
-        suffix = "filtered"
-      )
-    }
+  end_time <- Sys.time()
+  elapsed <- round(difftime(end_time, start_time, units = "secs"), 2)
 
-    end_time <- Sys.time()
-    elapsed <- round(difftime(end_time, start_time, units = "secs"), 2)
+  cli::cli_alert_success("Filtered variants")
 
-    cli::cli_alert_success("Filtered variants")
-
-    return(x)
+  return(x)
 }
 
 #' @title Exclude difficult regions
@@ -51,17 +55,28 @@ filter_variants.GWASFormatter = function(x, subset = NULL, exclude = NULL, ...) 
 #' @param ... Additional arguments passed to the method.
 #' @export
 exclude_difficult_regions = function(x, ...) {
-    UseMethod("exclude_difficult_regions")
+  UseMethod("exclude_difficult_regions")
 }
 
 #' @export
-exclude_difficult_regions.GWASFormatter = function(x, beds_exclude = c("hg19diff", "UCSC_unusual", "GRC_exclusions"), active_table = "filtered_variants",  ...) {
+exclude_difficult_regions.GWASFormatter = function(
+  x,
+  beds_exclude = c("hg19diff", "UCSC_unusual", "GRC_exclusions"),
+  active_table = "filtered_variants",
+  ...
+) {
   start_time <- Sys.time()
   cli::cli_alert_info("Now excluding 'difficult' regions...")
 
-  active_table = match.arg(active_table, c("filtered_variants", "summary_stats"))
-  stopifnot(all(beds_exclude %in% c("hg19diff", "UCSC_unusual", "GRC_exclusions", "GIAB_difficult_regions")))
-  
+  active_table = match.arg(
+    active_table,
+    c("filtered_variants", "summary_stats")
+  )
+  stopifnot(all(
+    beds_exclude %in%
+      c("hg19diff", "UCSC_unusual", "GRC_exclusions", "GIAB_difficult_regions")
+  ))
+
   con = x$con %||% db_connect()
 
   active_tbl = resolve_gwas_active_tbl_(x, active_table)
@@ -69,14 +84,23 @@ exclude_difficult_regions.GWASFormatter = function(x, beds_exclude = c("hg19diff
   for (bed in beds_exclude) {
     data(list = bed)
 
-    bed_tbl = copy_to_if_missing(con, get(bed), name = bed, temporary = FALSE) %>%
+    bed_tbl = copy_to_if_missing(
+      con,
+      get(bed),
+      name = bed,
+      temporary = FALSE
+    ) %>%
       dplyr::select(chrom, start, end) %>%
       dplyr::mutate(start = start + 1) # convert from 0-based to 1-based
 
-    active_tbl = dplyr::anti_join(active_tbl, bed_tbl, by = dplyr::join_by(chrom, between(x$POS, y$start, y$end))) 
+    active_tbl = dplyr::anti_join(
+      active_tbl,
+      bed_tbl,
+      by = dplyr::join_by(chrom, between(x$POS, y$start, y$end))
+    )
   }
 
-    materialize_gwas_tbl_(x, active_tbl, suffix = "excluded")
+  materialize_gwas_tbl_(x, active_tbl, suffix = "excluded")
 
   if (is.null(x$con)) {
     DBI::dbDisconnect(con)
@@ -89,7 +113,11 @@ exclude_difficult_regions.GWASFormatter = function(x, beds_exclude = c("hg19diff
 }
 
 #' @export
-exclude_difficult_regions.data.frame = function(x, beds_exclude = c("hg19diff", "UCSC_unusual", "GRC_exclusions"), ...) {
+exclude_difficult_regions.data.frame = function(
+  x,
+  beds_exclude = c("hg19diff", "UCSC_unusual", "GRC_exclusions"),
+  ...
+) {
   start_time <- Sys.time()
   cli::cli_alert_info("Now excluding 'difficult' regions...")
 
@@ -101,7 +129,10 @@ exclude_difficult_regions.data.frame = function(x, beds_exclude = c("hg19diff", 
       dplyr::mutate(start = start + 1) # convert from 0-based to 1-based
 
     x = x %>%
-      dplyr::anti_join(bed_tbl, by = dplyr::join_by(CHROM == chrom, between(x$POS, y$start, y$end)))
+      dplyr::anti_join(
+        bed_tbl,
+        by = dplyr::join_by(CHROM == chrom, between(x$POS, y$start, y$end))
+      )
   }
 
   end_time <- Sys.time()
@@ -113,6 +144,5 @@ exclude_difficult_regions.data.frame = function(x, beds_exclude = c("hg19diff", 
 
 #' @export
 exclude_difficult_regions.tbl_df = function(x, ...) {
-    exclude_difficult_regions.data.frame(x, ...)
+  exclude_difficult_regions.data.frame(x, ...)
 }
-

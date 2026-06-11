@@ -30,7 +30,9 @@ duckdb_stochastic_failure_message_ <- function(con, error) {
   c(
     "DuckDB meta-analysis requires the `stochastic` community extension.",
     "Run `INSTALL stochastic FROM community; LOAD stochastic;` in DuckDB before calling `meta_analyze_fe()` on `GWASFormatter` inputs.",
-    glue("DuckDB could not install or load `stochastic` in this session.{version_note}"),
+    glue(
+      "DuckDB could not install or load `stochastic` in this session.{version_note}"
+    ),
     glue("Original DuckDB error: {conditionMessage(error)}")
   )
 }
@@ -42,14 +44,20 @@ duckdb_check_stochastic_ <- function(con) {
     return(cached)
   }
 
-  status <- tryCatch({
-    DBI::dbExecute(con, "INSTALL stochastic FROM community")
-    DBI::dbExecute(con, "LOAD stochastic")
-    DBI::dbGetQuery(con, "SELECT dist_normal_cdf_complement(0.0, 1.0, 0.0) AS ok")
-    TRUE
-  }, error = function(e) {
-    duckdb_stochastic_failure_message_(con, e)
-  })
+  status <- tryCatch(
+    {
+      DBI::dbExecute(con, "INSTALL stochastic FROM community")
+      DBI::dbExecute(con, "LOAD stochastic")
+      DBI::dbGetQuery(
+        con,
+        "SELECT dist_normal_cdf_complement(0.0, 1.0, 0.0) AS ok"
+      )
+      TRUE
+    },
+    error = function(e) {
+      duckdb_stochastic_failure_message_(con, e)
+    }
+  )
 
   attr(con, "gwasplot_stochastic_available") <- status
   status
@@ -66,27 +74,35 @@ duckdb_require_stochastic_ <- function(con) {
 }
 
 duckdb_check_stochastic_onload_ <- function() {
-  if (!requireNamespace("DBI", quietly = TRUE) || !requireNamespace("duckdb", quietly = TRUE)) {
+  if (
+    !requireNamespace("DBI", quietly = TRUE) ||
+      !requireNamespace("duckdb", quietly = TRUE)
+  ) {
     return(invisible(FALSE))
   }
 
-  tryCatch({
-    con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
-    on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  tryCatch(
+    {
+      con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+      on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-    status <- duckdb_check_stochastic_(con)
-    .gwasplot_state$stochastic_status <- status
+      status <- duckdb_check_stochastic_(con)
+      .gwasplot_state$stochastic_status <- status
 
-    if (!isTRUE(status)) {
-      cli::cli_alert_warning(status[[1]])
+      if (!isTRUE(status)) {
+        cli::cli_alert_warning(status[[1]])
+      }
+
+      invisible(isTRUE(status))
+    },
+    error = function(e) {
+      .gwasplot_state$stochastic_status <- conditionMessage(e)
+      cli::cli_alert_warning(
+        "DuckDB stochastic preflight failed during package load."
+      )
+      invisible(FALSE)
     }
-
-    invisible(isTRUE(status))
-  }, error = function(e) {
-    .gwasplot_state$stochastic_status <- conditionMessage(e)
-    cli::cli_alert_warning("DuckDB stochastic preflight failed during package load.")
-    invisible(FALSE)
-  })
+  )
 }
 
 meta_two_sided_pvalue_sql_ <- function(z_expr) {
@@ -98,7 +114,9 @@ prepare_meta_input_ <- function(x, label) {
   missing_cols <- setdiff(meta_required_columns_, names(input))
 
   if (length(missing_cols) > 0) {
-    cli::cli_abort("{label} is missing required columns: {toString(missing_cols)}")
+    cli::cli_abort(
+      "{label} is missing required columns: {toString(missing_cols)}"
+    )
   }
 
   keep_cols <- unique(c(meta_required_columns_, meta_optional_columns_))
@@ -116,9 +134,16 @@ prepare_meta_input_ <- function(x, label) {
   input$.meta_ref <- pmin(input$REF, input$ALT)
   input$.meta_alt <- pmax(input$REF, input$ALT)
 
-  duplicate_keys <- duplicated(input[c("CHROM", "POS", ".meta_ref", ".meta_alt")])
+  duplicate_keys <- duplicated(input[c(
+    "CHROM",
+    "POS",
+    ".meta_ref",
+    ".meta_alt"
+  )])
   if (any(duplicate_keys)) {
-    cli::cli_abort("{label} contains duplicated variants after allele harmonization.")
+    cli::cli_abort(
+      "{label} contains duplicated variants after allele harmonization."
+    )
   }
 
   input
@@ -146,7 +171,11 @@ harmonize_meta_inputs_ <- function(x, y, allow_swaps = TRUE) {
     swapped_match[] <- FALSE
   }
 
-  joined$matched_by <- ifelse(exact_match, "exact", ifelse(swapped_match, "swap", "mismatch"))
+  joined$matched_by <- ifelse(
+    exact_match,
+    "exact",
+    ifelse(swapped_match, "swap", "mismatch")
+  )
   joined <- joined[joined$matched_by != "mismatch", , drop = FALSE]
 
   if (nrow(joined) == 0) {
@@ -154,7 +183,11 @@ harmonize_meta_inputs_ <- function(x, y, allow_swaps = TRUE) {
   }
 
   joined$flip_2 <- joined$matched_by == "swap"
-  joined$BETA_2_harmonized <- ifelse(joined$flip_2, -joined$BETA_2, joined$BETA_2)
+  joined$BETA_2_harmonized <- ifelse(
+    joined$flip_2,
+    -joined$BETA_2,
+    joined$BETA_2
+  )
 
   if ("AF_ALT_2" %in% names(joined)) {
     joined$AF_ALT_2_harmonized <- ifelse(
@@ -179,12 +212,17 @@ compute_fixed_effects_meta_ <- function(harmonized) {
   harmonized <- harmonized[valid, , drop = FALSE]
 
   if (nrow(harmonized) == 0) {
-    cli::cli_abort("No variants with finite BETA and SE values were available for meta-analysis.")
+    cli::cli_abort(
+      "No variants with finite BETA and SE values were available for meta-analysis."
+    )
   }
 
-  weight_1 <- 1 / (harmonized$SE_1 ^ 2)
-  weight_2 <- 1 / (harmonized$SE_2 ^ 2)
-  beta <- (weight_1 * harmonized$BETA_1 + weight_2 * harmonized$BETA_2_harmonized) / (weight_1 + weight_2)
+  weight_1 <- 1 / (harmonized$SE_1^2)
+  weight_2 <- 1 / (harmonized$SE_2^2)
+  beta <- (weight_1 *
+    harmonized$BETA_1 +
+    weight_2 * harmonized$BETA_2_harmonized) /
+    (weight_1 + weight_2)
   se <- sqrt(1 / (weight_1 + weight_2))
   z_score <- beta / se
   pvalue <- 2 * stats::pnorm(-abs(z_score))
@@ -209,7 +247,24 @@ compute_fixed_effects_meta_ <- function(harmonized) {
 
   if ("AF_ALT_1" %in% names(harmonized)) {
     result$AF_ALT <- harmonized$AF_ALT_1
-    result <- result[, c("CHROM", "POS", "REF", "ALT", "ID", "AF_ALT", "BETA", "SE", "PVALUE", "N_studies", "matched_by", "flip_2", "BETA_1", "SE_1", "BETA_2", "SE_2")]
+    result <- result[, c(
+      "CHROM",
+      "POS",
+      "REF",
+      "ALT",
+      "ID",
+      "AF_ALT",
+      "BETA",
+      "SE",
+      "PVALUE",
+      "N_studies",
+      "matched_by",
+      "flip_2",
+      "BETA_1",
+      "SE_1",
+      "BETA_2",
+      "SE_2"
+    )]
   }
 
   result
@@ -230,22 +285,40 @@ materialize_meta_input_table_ <- function(gwas, con, table_name, select_cols) {
     )
   }
 
-  index_name = sanitize_table_name_(paste(table_name, "idx", sep = "_"), paste0(table_name, "_idx"))
-  DBI::dbExecute(con, glue("CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} (CHROM, POS, REF, ALT)"))
+  index_name = sanitize_table_name_(
+    paste(table_name, "idx", sep = "_"),
+    paste0(table_name, "_idx")
+  )
+  DBI::dbExecute(
+    con,
+    glue(
+      "CREATE INDEX IF NOT EXISTS {index_name} ON {table_name} (CHROM, POS, REF, ALT)"
+    )
+  )
 
   invisible(table_name)
 }
 
 #' @export
-meta_analyze_fe.data.frame <- function(x, y, keep = c("overlap"), allow_swaps = TRUE, ...) {
+meta_analyze_fe.data.frame <- function(
+  x,
+  y,
+  keep = c("overlap"),
+  allow_swaps = TRUE,
+  ...
+) {
   if (!inherits(y, c("data.frame", "tbl_df"))) {
-    cli::cli_abort("For data.frame inputs, y must also be a data.frame or tibble.")
+    cli::cli_abort(
+      "For data.frame inputs, y must also be a data.frame or tibble."
+    )
   }
 
   keep <- match.arg(keep)
 
   if (keep != "overlap") {
-    cli::cli_abort("Only keep = 'overlap' is implemented in the current version.")
+    cli::cli_abort(
+      "Only keep = 'overlap' is implemented in the current version."
+    )
   }
 
   harmonized <- harmonize_meta_inputs_(x, y, allow_swaps = allow_swaps)
@@ -253,17 +326,41 @@ meta_analyze_fe.data.frame <- function(x, y, keep = c("overlap"), allow_swaps = 
 }
 
 #' @export
-meta_analyze_fe.tbl_df <- function(x, y, keep = c("overlap"), allow_swaps = TRUE, ...) {
+meta_analyze_fe.tbl_df <- function(
+  x,
+  y,
+  keep = c("overlap"),
+  allow_swaps = TRUE,
+  ...
+) {
   meta_analyze_fe.data.frame(x, y, keep = keep, allow_swaps = allow_swaps, ...)
 }
 
 #' @export
-meta_analyze_fe.GWASFormatter <- function(x, y, keep = c("overlap"), allow_swaps = TRUE, ...) {
+meta_analyze_fe.GWASFormatter <- function(
+  x,
+  y,
+  keep = c("overlap"),
+  allow_swaps = TRUE,
+  ...
+) {
   keep <- match.arg(keep)
-  select_cols <- c("CHROM", "POS", "REF", "ALT", "ID", "BETA", "SE", "PVALUE", "AF_ALT")
+  select_cols <- c(
+    "CHROM",
+    "POS",
+    "REF",
+    "ALT",
+    "ID",
+    "BETA",
+    "SE",
+    "PVALUE",
+    "AF_ALT"
+  )
 
   if (!inherits(y, c("GWASFormatter", "data.frame", "tbl_df"))) {
-    cli::cli_abort("For GWASFormatter inputs, y must be a GWASFormatter, data.frame, or tibble.")
+    cli::cli_abort(
+      "For GWASFormatter inputs, y must be a GWASFormatter, data.frame, or tibble."
+    )
   }
 
   if (!inherits(y, "GWASFormatter")) {
@@ -276,7 +373,13 @@ meta_analyze_fe.GWASFormatter <- function(x, y, keep = c("overlap"), allow_swaps
     )
 
     result_table = make_unique_table_name_(x$table_name, "meta")
-    dplyr::copy_to(x$con, result, name = result_table, temporary = FALSE, overwrite = TRUE)
+    dplyr::copy_to(
+      x$con,
+      result,
+      name = result_table,
+      temporary = FALSE,
+      overwrite = TRUE
+    )
     x$table_name = result_table
     x$source_table_name = result_table
     x$data = dplyr::tbl(x$con, result_table)
@@ -299,7 +402,8 @@ meta_analyze_fe.GWASFormatter <- function(x, y, keep = c("overlap"), allow_swaps
 
   pvalue_sql = meta_two_sided_pvalue_sql_("z_abs")
 
-  sql = glue(" 
+  sql = glue(
+    " 
   CREATE OR REPLACE TABLE {result_table} AS
   WITH x_input AS (
     SELECT
@@ -408,7 +512,8 @@ meta_analyze_fe.GWASFormatter <- function(x, y, keep = c("overlap"), allow_swaps
     BETA_2,
     SE_2
   FROM meta
-  ")
+  "
+  )
 
   DBI::dbExecute(x$con, sql)
 

@@ -177,11 +177,15 @@ find_nearest_gene.GWASFormatter = function(
     con,
     "CREATE INDEX IF NOT EXISTS chrom_start_end ON gene_intervals (chrom, expanded_start, expanded_end)"
   )
-  DBI::dbExecute(con, glue("CREATE INDEX IF NOT EXISTS chrom_pos ON {x$table_name} (CHROM, POS)"))
+  DBI::dbExecute(
+    con,
+    glue("CREATE INDEX IF NOT EXISTS chrom_pos ON {x$table_name} (CHROM, POS)")
+  )
 
   cli::cli_progress_step("Finding nearest genes")
   annotation_table = make_unique_table_name_(x$table_name, "annotated")
-  sql = glue(" 
+  sql = glue(
+    " 
   CREATE OR REPLACE TABLE {annotation_table} AS
   WITH NearestGenes AS (
     SELECT
@@ -218,7 +222,8 @@ find_nearest_gene.GWASFormatter = function(
     distance
   FROM RankedGenes
   WHERE rn = 1
-  ")
+  "
+  )
 
   cli::cli_progress_step("Updating gwas object with gene annotations\n")
   DBI::dbExecute(con, sql)
@@ -635,8 +640,16 @@ annotate_with_immunoglobulin.GWASFormatter = function(x, ...) {
     x,
     x$data %>%
       dplyr::mutate(
-        is_IGHV = ifelse(CHROM == "chr14" & POS >= 105586437 & POS <= 106879844, TRUE, FALSE),
-        is_IGLV = ifelse(CHROM == "chr22" & POS >= 22026076 & POS <= 22922913, TRUE, FALSE)
+        is_IGHV = ifelse(
+          CHROM == "chr14" & POS >= 105586437 & POS <= 106879844,
+          TRUE,
+          FALSE
+        ),
+        is_IGLV = ifelse(
+          CHROM == "chr22" & POS >= 22026076 & POS <= 22922913,
+          TRUE,
+          FALSE
+        )
       ),
     suffix = "annotated"
   )

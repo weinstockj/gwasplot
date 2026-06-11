@@ -12,11 +12,10 @@ volcano <- function(x, phenotype_label = NULL, ...) {
 #' @describeIn volcano Method for GWASFormatter objects
 #' @export
 volcano.GWASFormatter <- function(x, phenotype_label = NULL, ...) {
-
   df <- x$data %>%
     dplyr::select(
-        BETA, 
-        PVALUE
+      BETA,
+      PVALUE
     ) %>%
     dplyr::collect()
 
@@ -28,7 +27,11 @@ volcano.GWASFormatter <- function(x, phenotype_label = NULL, ...) {
 volcano.data.frame <- function(x, phenotype_label = NULL, ...) {
   # Determine x-axis variable - prefer posterior mean if available, otherwise use BETA
   x_var <- if ("pm" %in% names(x)) "pm" else "BETA"
-  x_lab <- if (x_var == "pm") "Posterior mean log odds-ratio" else "Effect size (BETA)"
+  x_lab <- if (x_var == "pm") {
+    "Posterior mean log odds-ratio"
+  } else {
+    "Effect size (BETA)"
+  }
   # Determine y-axis variable - prefer lfsr if available, otherwise use PVALUE
   if ("lfsr" %in% names(x)) {
     y_var <- "lfsr"
@@ -42,15 +45,22 @@ volcano.data.frame <- function(x, phenotype_label = NULL, ...) {
     stop("Data must contain either 'lfsr' or 'PVALUE' column")
   }
   # Create the plot
-  p <- ggplot2::ggplot(x, ggplot2::aes_string(x = x_var, y = paste0("-log10(", y_var, ")"))) +
-    ggplot2::geom_hline(yintercept = threshold_y, linetype = "dashed", alpha = 0.7) +
+  p <- ggplot2::ggplot(
+    x,
+    ggplot2::aes_string(x = x_var, y = paste0("-log10(", y_var, ")"))
+  ) +
+    ggplot2::geom_hline(
+      yintercept = threshold_y,
+      linetype = "dashed",
+      alpha = 0.7
+    ) +
     ggrastr::rasterize(
-        ggplot2::geom_point(
-                ggplot2::aes(color = if ("group" %in% names(x)) group else NULL), 
-                alpha = 0.75
-        ),
-        dpi = 300,
-        dev = "ragg_png"
+      ggplot2::geom_point(
+        ggplot2::aes(color = if ("group" %in% names(x)) group else NULL),
+        alpha = 0.75
+      ),
+      dpi = 300,
+      dev = "ragg_png"
     ) +
     ggplot2::labs(
       x = x_lab,
@@ -65,16 +75,17 @@ volcano.data.frame <- function(x, phenotype_label = NULL, ...) {
   }
   # Add text labels if label column exists
   if ("label" %in% names(x) && requireNamespace("ggrepel", quietly = TRUE)) {
-    p <- p + ggrepel::geom_text_repel(
-      data = x[!is.na(x$label) & x$label != "", ],
-      ggplot2::aes_string(label = "label"),
-      size = 2.5,
-      max.overlaps = 6,
-      label.padding = 0.25,
-      max.time = 4.5,
-      nudge_x = -0.2,
-      nudge_y = 1.1
-    )
+    p <- p +
+      ggrepel::geom_text_repel(
+        data = x[!is.na(x$label) & x$label != "", ],
+        ggplot2::aes_string(label = "label"),
+        size = 2.5,
+        max.overlaps = 6,
+        label.padding = 0.25,
+        max.time = 4.5,
+        nudge_x = -0.2,
+        nudge_y = 1.1
+      )
   }
 
   # Add title if provided

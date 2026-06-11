@@ -8,7 +8,11 @@
 #' @param read_only Logical. If TRUE, opens the database connection in read-only mode.
 #' @return An R6 object of class `GWASFormatter` containing the reformatted summary statistics.
 #' @export
-reformat_summary_statistics <- function(file_path, use_cache = FALSE, read_only = FALSE) {
+reformat_summary_statistics <- function(
+  file_path,
+  use_cache = FALSE,
+  read_only = FALSE
+) {
   # Check if the file exists
   if (!file.exists(file_path)) {
     stop(paste("File not found:", file_path))
@@ -25,16 +29,33 @@ reformat_summary_statistics <- function(file_path, use_cache = FALSE, read_only 
 
 standard_format_names_ = function() {
   list(
-    "saige" = c("CHR", "POS", "Allele1", "Allele2", "AC_Allele2", "AF_Allele2",
-                "N", "BETA", "SE", "p.value"),
-    "regenie" = c("CHROM", "POS", "ALLELE0", "ALLELE1", "A1FREQ", "BETA", "SE", "LOG10P")
+    "saige" = c(
+      "CHR",
+      "POS",
+      "Allele1",
+      "Allele2",
+      "AC_Allele2",
+      "AF_Allele2",
+      "N",
+      "BETA",
+      "SE",
+      "p.value"
+    ),
+    "regenie" = c(
+      "CHROM",
+      "POS",
+      "ALLELE0",
+      "ALLELE1",
+      "A1FREQ",
+      "BETA",
+      "SE",
+      "LOG10P"
+    )
   )
 }
 
 
-
 detect_format = function(names) {
-
   stopifnot(
     is.character(names),
     length(names) > 0,
@@ -44,17 +65,21 @@ detect_format = function(names) {
   standard_names = standard_format_names_()
 
   all_contained = purrr::map_lgl(
-      standard_names,
-      ~all(.x %in% names)
-    ) %>%
+    standard_names,
+    ~ all(.x %in% names)
+  ) %>%
     purrr::set_names(names(standard_names))
 
   if (sum(all_contained) == 0) {
-    stop("No standard format detected. Please provide a file in SAIGE or regenie format.")
+    stop(
+      "No standard format detected. Please provide a file in SAIGE or regenie format."
+    )
   }
 
   if (sum(all_contained) > 1) {
-    stop("Multiple formats detected. Please provide a file in SAIGE or regenie format.")
+    stop(
+      "Multiple formats detected. Please provide a file in SAIGE or regenie format."
+    )
   }
 
   if (all_contained["regenie"]) {
@@ -103,7 +128,6 @@ reformat_lookup = function() {
 #' @return An object of the same class as `ds` with renamed columns.
 #' @export
 reformat_names = function(ds, format) {
-
   format = match.arg(
     format,
     choices = c("saige", "regenie"),
@@ -117,16 +141,14 @@ reformat_names = function(ds, format) {
 }
 
 possibly_undo_log10p = function(ds, format) {
-
   formats_to_undo = c("regenie")
 
   if (format %in% formats_to_undo) {
-
     log_info(glue("Converting LOG10PVALUE to PVALUE for {format} format"))
 
     ds %>%
       dplyr::mutate(
-        PVALUE = 10 ^ (-LOG10P)
+        PVALUE = 10^(-LOG10P)
       )
   } else {
     ds
@@ -181,26 +203,42 @@ GWASFormatter <- R6::R6Class(
 
         self$data = tbl(self$con, self$table_name)
       } else {
-          if (file_ext == "parquet") {
-            tryCatch({
+        if (file_ext == "parquet") {
+          tryCatch(
+            {
               # Read parquet file with optimized column types
-              self$data = tbl(self$con, glue("
+              self$data = tbl(
+                self$con,
+                glue(
+                  "
                  read_parquet('{file_path}')
-              "))
-            }, error = function(e) {
+              "
+                )
+              )
+            },
+            error = function(e) {
               stop(paste("Error reading parquet file:", e$message))
-            })
+            }
+          )
         } else if (file_ext == "csv") {
-            tryCatch({
+          tryCatch(
+            {
               # Read CSV file with optimized column types
-              self$data = tbl(self$con, glue("
+              self$data = tbl(
+                self$con,
+                glue(
+                  "
                 read_csv('{file_path}')
-              "))
-            }, error = function(e) {
+              "
+                )
+              )
+            },
+            error = function(e) {
               stop(paste("Error reading CSV file:", e$message))
-            })
+            }
+          )
         } else {
-            stop("Unsupported file type. Please provide a parquet or CSV file.")
+          stop("Unsupported file type. Please provide a parquet or CSV file.")
         }
       }
 
@@ -209,7 +247,7 @@ GWASFormatter <- R6::R6Class(
         dplyr::collect(.) %>%
         names()
 
-      if(!use_cache) {
+      if (!use_cache) {
         self$detected_format = detect_format(self$data_names)
       } else {
         self$detected_format = "original format unknown"
@@ -221,9 +259,16 @@ GWASFormatter <- R6::R6Class(
         possibly_undo_log10p(self$detected_format) %>%
         possibly_replace_chr23(self$detected_format) %>%
         add_ID() %>%
-        dplyr::compute(temporary = FALSE, overwrite = TRUE, name = self$table_name)
+        dplyr::compute(
+          temporary = FALSE,
+          overwrite = TRUE,
+          name = self$table_name
+        )
 
-      DBI::dbExecute(self$con, glue("ALTER TABLE {self$table_name} ALTER POS TYPE INTEGER;")) # so it's not stored as a double
+      DBI::dbExecute(
+        self$con,
+        glue("ALTER TABLE {self$table_name} ALTER POS TYPE INTEGER;")
+      ) # so it's not stored as a double
       self$source_table_name = self$table_name
       self$data = tbl(self$con, self$table_name)
     },
