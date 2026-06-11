@@ -17,6 +17,12 @@
 
 ## Added
 
+- Added `exclude_aberrant_pvalue_loci()` to drop suspicious "lonely peak"
+  loci: a very strong lead variant (`PVALUE < lead_pvalue_threshold`, default
+  `5e-10`) with no nearby supporting variant (none reaching
+  `support_pvalue_threshold`, default `5e-5`, within `window_kb`, default
+  `500`). The number of variants dropped is logged. Supported for
+  `GWASFormatter`, `data.frame`, and `tibble` inputs.
 - Added `keep = "union"` to `meta_analyze_fe()`. The default `"overlap"` keeps
   only variants present in both studies; `"union"` keeps variants present in
   either study, passing single-study variants through with that study's estimate
