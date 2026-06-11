@@ -2,6 +2,6 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 qqconf <- function(n, conf_points, conf_alpha) {
-    .Call('_gwasplot_qqconf', PACKAGE = 'gwasplot', n, conf_points, conf_alpha)
+    .Call(`_gwasplot_qqconf`, n, conf_points, conf_alpha)
 }
 

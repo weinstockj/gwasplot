@@ -50,8 +50,10 @@ $ CHISQ     <dbl> 0.000464077, 1.817850000, 1.426620000, 0.186990000, 0.030108â€
 $ LOG10P    <dbl> 0.00752913, 0.75063100, 0.63391900, 0.17689500, 0.06437000
 ```
 
-gwastools will read in data from either regenie or saige and standarize the column names,
-and then create a table called `summary_stats` in a `duckdb` database. 
+gwasplot will read in data from either regenie or saige, standardize the column names,
+and then materialize each `GWASFormatter` object into its own DuckDB-backed table.
+This allows multiple GWAS objects to coexist in the same working directory without
+overwriting one another.
 
 # Key Features
 
@@ -99,6 +101,33 @@ Additional specialized annotations:
 - **Centromeres**: `annotate_with_centromere()` - identifies variants in centromeric regions  
 - **Immunoglobulin loci**: `annotate_with_immunoglobulin()` - flags variants in Ig heavy/light chain regions
 
+## Meta-analysis
+
+Combine two standardized GWAS datasets with inverse-variance fixed-effects meta-analysis:
+
+```r
+study1 <- reformat_summary_statistics("study1.parquet")
+study2 <- reformat_summary_statistics("study2.parquet")
+
+meta_gwas <- meta_analyze_fe(study1, study2)
+```
+
+Current behavior:
+- keeps only the harmonized overlap between the two studies
+- supports simple `REF`/`ALT` swaps by flipping the second study's `BETA`
+- returns standard GWAS columns such as `CHROM`, `POS`, `REF`, `ALT`, `ID`, `BETA`, `SE`, and `PVALUE`
+- runs inside DuckDB when both inputs are `GWASFormatter` objects
+
+Because the meta-analysis result uses the standard GWAS schema, it can flow directly into existing helpers:
+
+```r
+meta_hits <- meta_gwas %>%
+  select_top_hits(threshold = 5e-8) %>%
+  find_nearest_gene()
+
+manhattan(meta_gwas, output = "meta_analysis.manhattan.pdf")
+```
+
 ## Visualization
 
 ### Manhattan Plots
@@ -144,6 +173,7 @@ print(gwas_stats)
 
 GWAS object
 File path: ../concatenated_results.parquet
+Table name: summary_stats_concatenated_results_ab12cd34
 Detected format: regenie
 Data names: CHROM, POS, ID, ALLELE0, ALLELE1, A1FREQ, N, BETA, SE, CHISQ, LOG10P, phenotype
 Data preview:
@@ -184,6 +214,21 @@ top_hits <- gwas_clean %>%
 
 # Plot specific loci
 locuszoom(gwas_clean, locus_chr = "chr2", locus_start = 25000000, locus_end = 25500000)
+```
+
+## Two-study Meta-analysis Pipeline
+
+```r
+study1 <- reformat_summary_statistics("path/to/study1.parquet")
+study2 <- reformat_summary_statistics("path/to/study2.parquet")
+
+meta_gwas <- meta_analyze_fe(study1, study2)
+
+manhattan(meta_gwas, output = "meta_analysis.manhattan.pdf")
+
+meta_top_hits <- meta_gwas %>%
+  select_top_hits(threshold = 5e-8) %>%
+  find_nearest_gene()
 ```
 
 ## Contact

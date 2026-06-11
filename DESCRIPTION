@@ -1,7 +1,7 @@
 Package: gwasplot
 Type: Package
 Title: High Performance GWAS Plotting And Annotation
-Version: 0.1.0
+Version: 0.2.0
 Authors@R: c(
     person(
         "Josh", "Weinstock",
@@ -20,7 +20,7 @@ Imports:
     DBI,
     dbplyr,
     dplyr (>= 1.1.4),
-    duckdb (>= 1.2.1),
+    duckdb (>= 1.3.2),
     ggplot2 (>= 3.4.0),
     ggrastr,
     ghql,
@@ -36,13 +36,20 @@ Imports:
     stringr,
     tibble,
     tidyr
+<<<<<<< HEAD
 RoxygenNote: 7.3.3
 Suggests:
     quarto
 VignetteBuilder: quarto
+=======
+Suggests:
+    testthat (>= 3.0.0)
+RoxygenNote: 7.3.2
+>>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
 LinkingTo: 
     Rcpp
 Depends: 
     R (>= 3.5)
+Config/testthat/edition: 3
 URL: https://github.com/weinstocklab/gwasplot, https://weinstocklab.github.io/gwasplot/
 BugReports: https://github.com/weinstocklab/gwasplot/issues

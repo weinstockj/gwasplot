@@ -18,6 +18,7 @@ create_chrom_lookup = function() {
 prepare_manhattan_data = function(gwas_data, chrom_lookup, lower_logp_threshold = 3.0) {
   scaling = 1e8
 
+<<<<<<< HEAD
   # Preserve gene_name if present
   extra_cols <- intersect("gene_name", colnames(gwas_data))
   base_cols  <- c("CHROM", "POS", "PVALUE")
@@ -37,9 +38,34 @@ prepare_manhattan_data = function(gwas_data, chrom_lookup, lower_logp_threshold 
     # Add this info to the initial dataset
     dplyr::right_join(gwas_data %>% dplyr::select(dplyr::all_of(all_cols)), by = "CHROM") %>%
     # Add a cumulative position of each SNP
+=======
+  base_data = gwas_data %>%
+    dplyr::select(CHROM, POS, PVALUE) %>%
+    dplyr::inner_join(chrom_lookup, by = "CHROM")
+
+  chrom_offsets = base_data %>%
+    dplyr::group_by(CHROM_index, CHROM) %>%
+    dplyr::summarise(
+      chr_len = (max(POS, na.rm = TRUE) - min(POS, na.rm = TRUE)) / scaling,
+      .groups = "drop"
+    )
+
+  if (inherits(chrom_offsets, "tbl_sql")) {
+    chrom_offsets = chrom_offsets %>%
+      dbplyr::window_order(CHROM_index) %>%
+      dplyr::mutate(tot = cumsum(chr_len) - chr_len)
+  } else {
+    chrom_offsets = chrom_offsets %>%
+      dplyr::arrange(CHROM_index) %>%
+      dplyr::mutate(tot = cumsum(chr_len) - chr_len)
+  }
+  
+  # Compute chromosome positions and cumulative coordinates
+  prepared = base_data %>%
+    dplyr::inner_join(chrom_offsets, by = c("CHROM_index", "CHROM")) %>%
+>>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
     dplyr::arrange(CHROM_index, POS) %>%
     dplyr::mutate(POScum = POS / scaling + tot) %>%
-    # Filter SNP to make the plot lighter
     dplyr::filter(-log10(PVALUE) > lower_logp_threshold)
 
   return(prepared)
@@ -49,8 +75,7 @@ prepare_manhattan_data = function(gwas_data, chrom_lookup, lower_logp_threshold 
 calculate_axis_positions = function(prepared_data) {
   axis = prepared_data %>%
     dplyr::group_by(CHROM_index, CHROM) %>%
-    dplyr::summarize(center = (max(POScum) + min(POScum)) / 2) %>% # integer overflow concern
-    dplyr::ungroup(.) %>%
+    dplyr::summarize(center = (max(POScum) + min(POScum)) / 2, .groups = "drop") %>% # integer overflow concern
     dplyr::arrange(CHROM_index, center)
 
   return(axis)
@@ -349,6 +374,7 @@ manhattan.GWASFormatter = function(gwas, output, lower_logp_threshold = 3.0, lab
   log_info("Now preparing to plot")
 
   # Create chromosome lookup and copy to database connection
+<<<<<<< HEAD
   chrom_lookup = create_chrom_lookup() %>%
     dplyr::copy_to(gwas$con, ., "chrom_lookup", overwrite = TRUE)
 
@@ -359,10 +385,23 @@ manhattan.GWASFormatter = function(gwas, output, lower_logp_threshold = 3.0, lab
   axis = calculate_axis_positions(prepared) %>%
     dplyr::collect(.)
 
+=======
+  chrom_lookup = copy_to_if_missing(gwas$con, create_chrom_lookup(), "chrom_lookup")
+  
+  # Prepare data
+  prepared = prepare_manhattan_data(gwas$data, chrom_lookup, lower_logp_threshold)
+  
+>>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
   # Collect prepared data from database
   prepared = prepared %>%
     dplyr::collect(.)
 
+<<<<<<< HEAD
+=======
+  # Calculate axis positions after collecting the prepared points once
+  axis = calculate_axis_positions(prepared)
+  
+>>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
   log_info(glue("Done preparing to plot {nrow(prepared)} SNPs."))
 
   # Create plot (no y_max_cap for GWASFormatter to avoid pmin issue with database)

@@ -159,18 +159,27 @@ GWASFormatter <- R6::R6Class(
   public = list(
     con = NULL,
     data = NULL,
+    table_name = NULL,
+    source_table_name = NULL,
     data_names = NULL,
     detected_format = NULL,
     file_path = NULL,
     initialize = function(file_path, use_cache = FALSE, read_only = FALSE) {
       self$file_path = file_path
       self$con = db_connect(read_only = read_only)
+      self$table_name = make_gwas_table_name_(file_path, use_cache = use_cache)
+      self$source_table_name = self$table_name
 
       file_ext <- tolower(tools::file_ext(file_path))
 
       if (use_cache) {
-        cli::cli_alert_info("Using cached table 'summary_stats'")
-        self$data = tbl(self$con, "summary_stats")
+        cli::cli_alert_info("Using cached table '{self$table_name}'")
+
+        if (!DBI::dbExistsTable(self$con, self$table_name)) {
+          cli::cli_abort("Cached table '{self$table_name}' was not found.")
+        }
+
+        self$data = tbl(self$con, self$table_name)
       } else {
           if (file_ext == "parquet") {
             tryCatch({
@@ -212,9 +221,11 @@ GWASFormatter <- R6::R6Class(
         possibly_undo_log10p(self$detected_format) %>%
         possibly_replace_chr23(self$detected_format) %>%
         add_ID() %>%
-        dplyr::compute(temporary = FALSE, overwrite = TRUE, name = "summary_stats")
+        dplyr::compute(temporary = FALSE, overwrite = TRUE, name = self$table_name)
 
-      DBI::dbExecute(self$con, "ALTER TABLE summary_stats ALTER POS TYPE INTEGER;") # so it's not stored as a double
+      DBI::dbExecute(self$con, glue("ALTER TABLE {self$table_name} ALTER POS TYPE INTEGER;")) # so it's not stored as a double
+      self$source_table_name = self$table_name
+      self$data = tbl(self$con, self$table_name)
     },
     kill = function() {
       DBI::dbDisconnect(self$con)
@@ -222,6 +233,7 @@ GWASFormatter <- R6::R6Class(
     print = function(...) {
       cat("GWAS object\n")
       cat("File path:", self$file_path, "\n")
+      cat("Table name:", self$table_name, "\n")
       cat("Detected format:", self$detected_format, "\n")
       cat("Data names:", paste(self$data_names, collapse = ", "), "\n")
       cat("Data preview:\n")

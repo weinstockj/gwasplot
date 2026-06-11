@@ -138,19 +138,23 @@ find_nearest_gene.GWASFormatter = function(
   # Start timing
   start_time <- Sys.time()
   cli::cli_alert_info("Starting gene annotation...")
+<<<<<<< HEAD
 
   con = db_connect()
+=======
+  
+  con = x$con %||% db_connect()
+>>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
 
   DBI::dbExecute(con, "PRAGMA max_temp_directory_size = '30GB'")
 
   # Load human genes data
   cli::cli_progress_step("Loading gene reference data")
-  dplyr::copy_to(
+  copy_to_if_missing(
     con,
     human_genes,
     name = "human_genes",
-    temporary = FALSE,
-    overwrite = TRUE
+    temporary = FALSE
   )
 
   # Create spatial index for genes
@@ -162,7 +166,7 @@ find_nearest_gene.GWASFormatter = function(
     gene_name,
     gene_biotype,
     chrom,
-    start - {format(threshold, scientific = FALSE)} AS expanded_start,
+    GREATEST(start - {format(threshold, scientific = FALSE)}, 0) AS expanded_start,
     g.\"end\" + {format(threshold, scientific = FALSE)} AS expanded_end,
     start,
     g.\"end\"
@@ -178,14 +182,20 @@ find_nearest_gene.GWASFormatter = function(
     con,
     "CREATE INDEX IF NOT EXISTS chrom_start_end ON gene_intervals (chrom, expanded_start, expanded_end)"
   )
+<<<<<<< HEAD
   DBI::dbExecute(
     con,
     "CREATE INDEX IF NOT EXISTS chrom_pos ON summary_stats (chrom, POS)"
   )
 
+=======
+  DBI::dbExecute(con, glue("CREATE INDEX IF NOT EXISTS chrom_pos ON {x$table_name} (CHROM, POS)"))
+  
+>>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
   cli::cli_progress_step("Finding nearest genes")
-  sql = "
-  CREATE OR REPLACE TABLE summary_stats_annotated AS
+  annotation_table = make_unique_table_name_(x$table_name, "annotated")
+  sql = glue(" 
+  CREATE OR REPLACE TABLE {annotation_table} AS
   WITH NearestGenes AS (
     SELECT
       t.*,
@@ -199,7 +209,7 @@ find_nearest_gene.GWASFormatter = function(
         -- Variant downstream of gene
         ELSE t.POS - g.end
       END AS distance  
-    FROM summary_stats t
+    FROM {x$table_name} t
     -- Efficient range join instead of cross join
     JOIN gene_intervals g ON 
       t.chrom = g.chrom AND 
@@ -221,15 +231,30 @@ find_nearest_gene.GWASFormatter = function(
     distance
   FROM RankedGenes
   WHERE rn = 1
-  "
+  ")
 
   cli::cli_progress_step("Updating gwas object with gene annotations\n")
   DBI::dbExecute(con, sql)
 
+<<<<<<< HEAD
   x$data = dplyr::tbl(con, "summary_stats_annotated") %>%
     dplyr::select(ID, gene_id, gene_name, distance) %>%
     dplyr::inner_join(x$data, by = "ID", copy = TRUE)
 
+=======
+  materialize_gwas_tbl_(
+    x,
+    x$data %>%
+      dplyr::left_join(
+        dplyr::tbl(con, annotation_table) %>%
+          dplyr::select(CHROM, POS, ID, gene_id, gene_name, distance),
+        by = c("CHROM", "POS", "ID"),
+        copy = TRUE
+      ),
+    suffix = "annotated"
+  )
+  
+>>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
   # End timing and report
   end_time <- Sys.time()
   elapsed <- round(difftime(end_time, start_time, units = "secs"), 2)
@@ -317,6 +342,7 @@ find_nearest_gene.data.frame = function(
       POS = !!rlang::sym(pos_col),
       ID = !!rlang::sym(id_col)
     )
+<<<<<<< HEAD
 
   # In-memory DuckDB — same fast range-join as GWASFormatter, no file written
   con <- DBI::dbConnect(duckdb::duckdb())
@@ -377,6 +403,53 @@ find_nearest_gene.data.frame = function(
     RankedGenes AS (
       SELECT *, ROW_NUMBER() OVER (PARTITION BY ID ORDER BY distance) AS rn
       FROM NearestGenes
+=======
+  
+  # Load and filter human genes data
+  genes_df <- human_genes %>%
+    dplyr::filter(gene_biotype == "protein_coding" & !is.na(gene_name)) %>%
+    dplyr::mutate(
+      expanded_start = pmax(start - threshold, 0),
+      expanded_end = end + threshold,
+      gene_order = dplyr::row_number()
+    )
+
+  variant_keys <- renamed_df %>%
+    dplyr::distinct(CHROM, POS, ID)
+  
+  nearest_genes <- variant_keys %>%
+    dplyr::inner_join(
+      genes_df,
+      by = dplyr::join_by(CHROM == chrom, dplyr::between(POS, expanded_start, expanded_end))
+    ) %>%
+    dplyr::mutate(
+      distance = dplyr::case_when(
+        POS >= start & POS <= end ~ 0,
+        POS < start ~ start - POS,
+        TRUE ~ POS - end
+      )
+    ) %>%
+    dplyr::arrange(CHROM, POS, ID, distance, gene_order) %>%
+    dplyr::group_by(CHROM, POS, ID) %>%
+    dplyr::slice_head(n = 1) %>%
+    dplyr::ungroup() %>%
+    dplyr::transmute(
+      CHROM,
+      POS,
+      ID,
+      gene_id,
+      gene_name,
+      distance = as.integer(distance)
+    )
+  
+  renamed_df = renamed_df %>%
+    dplyr::left_join(
+      nearest_genes,
+      by = c("CHROM", "POS", "ID")
+    ) %>%
+    dplyr::mutate(
+      distance = dplyr::if_else(is.na(distance), NA_integer_, as.integer(distance))
+>>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
     )
     SELECT ID, gene_id, gene_name, distance FROM RankedGenes WHERE rn = 1
   "
@@ -478,21 +551,21 @@ annotate_with_centromere.tbl_df = function(x, ...) {
 #' @describeIn annotate_with_centromere Centromere annotation method for GWASFormatter objects
 #' @export
 annotate_with_centromere.GWASFormatter = function(x, ...) {
-  con = db_connect()
+  con = x$con %||% db_connect()
 
-  dplyr::copy_to(
+  copy_to_if_missing(
     con,
     ideogram %>%
       dplyr::mutate(
         in_centromere = ifelse(stain == "acen", TRUE, FALSE)
       ),
     name = "ideogram",
-    temporary = FALSE,
-    overwrite = TRUE
+    temporary = FALSE
   )
 
   cen_tbl = dplyr::tbl(con, "ideogram")
 
+<<<<<<< HEAD
   x$data = x$data %>%
     dplyr::left_join(
       cen_tbl %>%
@@ -505,6 +578,24 @@ annotate_with_centromere.GWASFormatter = function(x, ...) {
         TRUE ~ in_centromere
       )
     )
+=======
+  materialize_gwas_tbl_(
+    x,
+    x$data %>%
+      dplyr::left_join(
+        cen_tbl %>%
+          dplyr::select(CHROM = chrom, start, end, in_centromere),
+        by = dplyr::join_by(CHROM, dplyr::between(POS, start, end))
+      ) %>%
+      dplyr::mutate(
+        in_centromere = dplyr::case_when(
+          is.na(in_centromere) ~ FALSE,
+          TRUE ~ in_centromere
+        )
+      ),
+    suffix = "annotated"
+  )
+>>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
 
   return(x)
 }
@@ -545,13 +636,16 @@ annotate_with_chip_genes.GWASFormatter = function(top_hits) {
   }
 
   con = db_connect()
+  on.exit(if (DBI::dbIsValid(con)) DBI::dbDisconnect(con), add = TRUE)
 
-  dplyr::copy_to(
+  top_hits_table = make_unique_table_name_("top_hits", "chip")
+
+  top_hits_tbl = dplyr::copy_to(
     con,
     top_hits,
-    name = "top_hits",
-    temporary = FALSE,
-    overwrite = TRUE
+    name = top_hits_table,
+    temporary = TRUE,
+    overwrite = FALSE
   )
 
   chip_df = tibble::tibble(
@@ -562,14 +656,14 @@ annotate_with_chip_genes.GWASFormatter = function(top_hits) {
       is_chip_gene = TRUE
     )
 
-  dplyr::copy_to(
+  copy_to_if_missing(
     con,
     chip_df,
     name = "chip_genes",
-    temporary = FALSE,
-    overwrite = TRUE
+    temporary = FALSE
   )
 
+<<<<<<< HEAD
   sql = glue(
     "
   SELECT
@@ -582,6 +676,12 @@ annotate_with_chip_genes.GWASFormatter = function(top_hits) {
 
   DBI::dbGetQuery(con, sql) %>%
     tibble::as_tibble(.) %>%
+=======
+  top_hits_tbl %>%
+    dplyr::left_join(dplyr::tbl(con, "chip_genes"), by = "gene_name") %>%
+    dplyr::collect() %>%
+    tibble::as_tibble() %>%
+>>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
     dplyr::mutate(
       is_chip_gene = dplyr::case_when(
         is.na(is_chip_gene) ~ FALSE,
@@ -626,6 +726,7 @@ annotate_with_immunoglobulin.tbl_df = function(x, ...) {
 
 #' @export
 annotate_with_immunoglobulin.GWASFormatter = function(x, ...) {
+<<<<<<< HEAD
   con = db_connect()
 
   x$data = x$data %>%
@@ -643,6 +744,21 @@ annotate_with_immunoglobulin.GWASFormatter = function(x, ...) {
     ) %>%
     dplyr::compute(temporary = FALSE, overwrite = TRUE, name = "summary_stats")
 
+=======
+  
+  con = x$con %||% db_connect()
+
+  materialize_gwas_tbl_(
+    x,
+    x$data %>%
+      dplyr::mutate(
+        is_IGHV = ifelse(CHROM == "chr14" & POS >= 105586437 & POS <= 106879844, TRUE, FALSE),
+        is_IGLV = ifelse(CHROM == "chr22" & POS >= 22026076 & POS <= 22922913, TRUE, FALSE)
+      ),
+    suffix = "annotated"
+  )
+
+>>>>>>> 0e4e773 (refactor and add meta-analysis functionality)
   return(x)
 }
 

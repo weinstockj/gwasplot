@@ -1,3 +1,5 @@
+.gwasplot_state <- new.env(parent = emptyenv())
+
 .onLoad <- function(libname, pkgname) {
   # Set the default value for the duckdb_max_memory option
 
@@ -9,5 +11,6 @@
   cli::cli_alert_info("Change this with options(duckdb_max_memory = 'XGB')")
   options(duckdb_max_memory = glue("{set_RAM}GB")) # Or any other reasonable default
 
-  # You can also perform other package initialization tasks here
+  .gwasplot_state$stochastic_status <- NULL
+  duckdb_check_stochastic_onload_()
 }
