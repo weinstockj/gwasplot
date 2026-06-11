@@ -43,6 +43,8 @@
 <div class="section level3">
 <h3 id="changed-development-version">Changed<a class="anchor" aria-label="anchor" href="#changed-development-version"></a></h3>
 <ul><li>
+<code><a href="../reference/manhattan.html">manhattan()</a></code> gene labels are now lifted above their points and repelled along the y-axis only, so each name sits directly above its variant instead of overlapping the points. The lift is controlled by the new <code>label_nudge_y</code> argument (default: 4% of the plotted y-range; set to 0 to disable).</li>
+<li>
 <code><a href="../reference/qqplot.html">qqplot()</a></code> now renders with a fixed square panel (<code>aspect.ratio</code>, default 1) instead of <code>coord_equal()</code>. A strong GWAS with very large observed <code>-log10(p)</code> no longer stretches the plot into a tall, thin rectangle. Pass <code>aspect.ratio</code> to adjust. The y = x reference line is still drawn but no longer sits at a literal 45 degrees.</li>
 </ul></div>
 <div class="section level3">

@@ -53,6 +53,7 @@
 <span>  label_strategy <span class="op">=</span> <span class="st">"lead_per_locus"</span>,</span>
 <span>  label_locus_window_kb <span class="op">=</span> <span class="fl">500</span>,</span>
 <span>  label_pvalue_threshold <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  label_nudge_y <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  italic_gene_labels <span class="op">=</span> <span class="cn">TRUE</span>,</span>
 <span>  highlight_genes <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  highlight_color <span class="op">=</span> <span class="st">"red3"</span>,</span>
@@ -98,6 +99,13 @@ or `"lead_per_locus"` (one lead per locus, then top N). Default `"lead_per_locus
 `PVALUE &lt; label_pvalue_threshold` are eligible for labels (genes in
 `highlight_genes` are always labeled regardless). Default NULL, which uses
 the genome-wide significance line (5e-8).</p></dd>
+
+
+<dt id="arg-label-nudge-y">label_nudge_y<a class="anchor" aria-label="anchor" href="#arg-label-nudge-y"></a></dt>
+<dd><p>Vertical distance (in `-log10(p)` units) to lift gene
+labels above their points; labels are repelled along the y-axis only so
+each name sits directly above its variant. Default NULL, which uses 4<!-- % of -->
+the plotted y-range. Set to 0 to disable the upward nudge.</p></dd>
 
 
 <dt id="arg-italic-gene-labels">italic_gene_labels<a class="anchor" aria-label="anchor" href="#arg-italic-gene-labels"></a></dt>
