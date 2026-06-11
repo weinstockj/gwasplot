@@ -84,7 +84,9 @@ or a numeric vector (or list of numeric vectors) of p-values.</p></dd>
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
 <dd><p>Additional arguments passed to the underlying `.make_qqplot()`
-(e.g. `should.thin`, `draw.conf`, `point.color`).</p></dd>
+(e.g. `should.thin`, `draw.conf`, `point.color`, `aspect.ratio`). The panel
+is rendered with a fixed `aspect.ratio` (default 1, i.e. square) so a strong
+GWAS no longer stretches the plot into a tall rectangle.</p></dd>
 
 
 <dt id="arg-width">width<a class="anchor" aria-label="anchor" href="#arg-width"></a></dt>
