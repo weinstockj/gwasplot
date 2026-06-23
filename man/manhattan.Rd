@@ -17,6 +17,7 @@ manhattan(
   highlight_genes = NULL,
   highlight_color = "red3",
   label_color = "black",
+  label_max_y_nudge = NULL,
   ...
 )
 }
@@ -43,9 +44,9 @@ or `"lead_per_locus"` (one lead per locus, then top N). Default `"lead_per_locus
 the genome-wide significance line (5e-8).}
 
 \item{label_nudge_y}{Vertical distance (in `-log10(p)` units) to lift gene
-labels above their points; labels are repelled along the y-axis only so
-each name sits directly above its variant. Default NULL, which uses 4% of
-the plotted y-range. Set to 0 to disable the upward nudge.}
+labels above their points. Default NULL uses adaptive per-label nudges.
+Set to a number to force the same upward nudge for every label, or 0 to
+disable the upward nudge.}
 
 \item{italic_gene_labels}{Logical. If TRUE, gene labels are italicized; cytoband
 fallback labels remain plain text. Default TRUE.}
@@ -56,6 +57,10 @@ fallback labels remain plain text. Default TRUE.}
 \item{highlight_color}{Color for highlighted labels. Default `"red3"`.}
 
 \item{label_color}{Color for non-highlighted labels. Default `"black"`.}
+
+\item{label_max_y_nudge}{Maximum adaptive starting nudge for labels in
+`-log10(p)` units. `NULL` chooses a conservative value from the plotted
+y-range. Lower values keep labels closer to variants. Default NULL.}
 
 \item{...}{Additional arguments passed to `ggsave`.}
 }

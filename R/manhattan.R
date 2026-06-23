@@ -13,9 +13,14 @@ utils::globalVariables(c(
   "locus_id",
   "is_lead",
   "label_text",
-  "label_expr",
   "label_is_gene",
-  "label_is_highlight"
+  "label_expr",
+  "label_is_highlight",
+  "label_y",
+  "label_nudge_y",
+  ".label_cluster",
+  ".cluster_gap",
+  ".label_slot"
 ))
 
 # Helper function to create chromosome lookup table
@@ -225,6 +230,80 @@ select_label_points = function(
   label_df
 }
 
+# Compute modest, data-aware starting nudges for Manhattan labels.
+#
+# `ggrepel` still does the final collision avoidance, but these nudges give it a
+# better initial layout: isolated labels stay close to their SNPs, while labels
+# in the same horizontal neighborhood get progressively stacked.
+calculate_label_layout = function(
+  label_df,
+  prepared_data,
+  y_max_cap = 300,
+  label_nudge_y = NULL,
+  label_max_y_nudge = NULL
+) {
+  if (is.null(label_df) || nrow(label_df) == 0) {
+    return(label_df)
+  }
+
+  label_y <- -log10(label_df$PVALUE)
+  plotted_y <- pmin(-log10(prepared_data$PVALUE), y_max_cap)
+  plotted_y <- plotted_y[is.finite(plotted_y)]
+
+  if (length(plotted_y) == 0) {
+    y_span <- 1
+  } else {
+    y_span <- diff(range(plotted_y, na.rm = TRUE))
+    if (!is.finite(y_span) || y_span <= 0) {
+      y_span <- max(plotted_y, na.rm = TRUE)
+    }
+    if (!is.finite(y_span) || y_span <= 0) {
+      y_span <- 1
+    }
+  }
+
+  fixed_nudge <- if (is.null(label_nudge_y)) {
+    NULL
+  } else {
+    max(0, label_nudge_y)
+  }
+  base_nudge <- max(0.25, min(0.8, y_span * 0.025))
+  step_nudge <- max(0.35, min(0.9, y_span * 0.03))
+  max_nudge <- if (is.null(label_max_y_nudge)) {
+    max(1.25, min(4, y_span * 0.12))
+  } else {
+    max(0, label_max_y_nudge)
+  }
+
+  x_vals <- prepared_data$POScum[is.finite(prepared_data$POScum)]
+  x_span <- if (length(x_vals) > 1) diff(range(x_vals, na.rm = TRUE)) else 1
+  if (!is.finite(x_span) || x_span <= 0) {
+    x_span <- 1
+  }
+
+  cluster_width <- max(0.05, x_span * 0.0125)
+
+  label_df %>%
+    dplyr::mutate(label_y = label_y) %>%
+    dplyr::arrange(POScum, dplyr::desc(label_y)) %>%
+    dplyr::mutate(
+      .cluster_gap = c(Inf, diff(POScum)),
+      .label_cluster = cumsum(.cluster_gap > cluster_width)
+    ) %>%
+    dplyr::group_by(.label_cluster) %>%
+    dplyr::arrange(dplyr::desc(label_y), .by_group = TRUE) %>%
+    dplyr::mutate(
+      .label_slot = dplyr::row_number() - 1L,
+      label_nudge_y = if (is.null(fixed_nudge)) {
+        pmin(max_nudge, base_nudge + .label_slot * step_nudge)
+      } else {
+        fixed_nudge
+      }
+    ) %>%
+    dplyr::ungroup() %>%
+    dplyr::arrange(PVALUE)
+}
+
 # Helper function to create the Manhattan plot
 create_manhattan_plot = function(
   prepared_data,
@@ -240,6 +319,7 @@ create_manhattan_plot = function(
   highlight_genes = NULL,
   highlight_color = "red3",
   label_color = "black",
+  label_max_y_nudge = NULL,
   base_size = 7
 ) {
   label_strategy <- match.arg(label_strategy)
@@ -247,13 +327,6 @@ create_manhattan_plot = function(
   # Default the labeling cutoff to the genome-wide significance line.
   if (is.null(label_pvalue_threshold)) {
     label_pvalue_threshold <- pvalue_threshold
-  }
-
-  # Default upward nudge for gene labels: a small fraction of the plotted y-range
-  # so labels lift off their points regardless of overall signal strength.
-  if (is.null(label_nudge_y)) {
-    y_top <- max(-log10(prepared_data$PVALUE), na.rm = TRUE)
-    label_nudge_y <- 0.04 * y_top
   }
 
   p = ggplot2::ggplot(prepared_data, aes(x = POScum, y = -log10(PVALUE))) +
@@ -319,6 +392,14 @@ create_manhattan_plot = function(
       )
 
       if (!is.null(label_df) && nrow(label_df) > 0) {
+        label_df <- calculate_label_layout(
+          label_df = label_df,
+          prepared_data = prepared_data,
+          y_max_cap = y_max_cap,
+          label_nudge_y = label_nudge_y,
+          label_max_y_nudge = label_max_y_nudge
+        )
+
         common_repel_args <- list(
           mapping = ggplot2::aes(
             x = POScum,
@@ -329,12 +410,13 @@ create_manhattan_plot = function(
           size = 3,
           max.overlaps = Inf,
           seed = 42,
-          # Lift labels upward and repel only along y so each gene name sits in a
-          # band directly above its variant rather than overlapping the points.
-          nudge_y = label_nudge_y,
           direction = "y",
-          point.padding = 0.3,
-          box.padding = 0.4,
+          box.padding = 0.25,
+          point.padding = 0.15,
+          force = 0.25,
+          force_pull = 1.5,
+          max.time = 1,
+          max.iter = 20000,
           segment.size = 0.25,
           segment.alpha = 0.65,
           segment.color = "grey35",
@@ -345,33 +427,33 @@ create_manhattan_plot = function(
         highlight_df <- label_df %>% dplyr::filter(label_is_highlight)
 
         if (nrow(normal_df) > 0) {
-          p <- p +
-            do.call(
-              ggrepel::geom_text_repel,
-              c(
-                list(
-                  data = normal_df,
-                  colour = label_color,
-                  inherit.aes = FALSE
-                ),
-                common_repel_args
-              )
+          p <- p + do.call(
+            ggrepel::geom_text_repel,
+            c(
+              list(
+                data = normal_df,
+                colour = label_color,
+                nudge_y = normal_df$label_nudge_y,
+                inherit.aes = FALSE
+              ),
+              common_repel_args
             )
+          )
         }
         if (nrow(highlight_df) > 0) {
-          p <- p +
-            do.call(
-              ggrepel::geom_text_repel,
-              c(
-                list(
-                  data = highlight_df,
-                  colour = highlight_color,
-                  fontface = "bold",
-                  inherit.aes = FALSE
-                ),
-                common_repel_args
-              )
+          p <- p + do.call(
+            ggrepel::geom_text_repel,
+            c(
+              list(
+                data = highlight_df,
+                colour = highlight_color,
+                fontface = "bold",
+                nudge_y = highlight_df$label_nudge_y,
+                inherit.aes = FALSE
+              ),
+              common_repel_args
             )
+          )
         }
       }
     } else {
@@ -415,15 +497,18 @@ save_manhattan_plot = function(plot, output, ...) {
 #'   `highlight_genes` are always labeled regardless). Default NULL, which uses
 #'   the genome-wide significance line (5e-8).
 #' @param label_nudge_y Vertical distance (in `-log10(p)` units) to lift gene
-#'   labels above their points; labels are repelled along the y-axis only so
-#'   each name sits directly above its variant. Default NULL, which uses 4% of
-#'   the plotted y-range. Set to 0 to disable the upward nudge.
+#'   labels above their points. Default NULL uses adaptive per-label nudges.
+#'   Set to a number to force the same upward nudge for every label, or 0 to
+#'   disable the upward nudge.
 #' @param italic_gene_labels Logical. If TRUE, gene labels are italicized; cytoband
 #'   fallback labels remain plain text. Default TRUE.
 #' @param highlight_genes Optional character vector of gene symbols to highlight
 #'   (e.g., novel genes). Matching labels are colored with `highlight_color`.
 #' @param highlight_color Color for highlighted labels. Default `"red3"`.
 #' @param label_color Color for non-highlighted labels. Default `"black"`.
+#' @param label_max_y_nudge Maximum adaptive starting nudge for labels in
+#'   `-log10(p)` units. `NULL` chooses a conservative value from the plotted
+#'   y-range. Lower values keep labels closer to variants. Default NULL.
 #' @param ... Additional arguments passed to `ggsave`.
 #' @return NULL
 #' @export
@@ -440,6 +525,7 @@ manhattan = function(
   highlight_genes = NULL,
   highlight_color = "red3",
   label_color = "black",
+  label_max_y_nudge = NULL,
   ...
 ) {
   UseMethod("manhattan")
@@ -459,6 +545,7 @@ manhattan.tbl_df = function(
   highlight_genes = NULL,
   highlight_color = "red3",
   label_color = "black",
+  label_max_y_nudge = NULL,
   ...
 ) {
   manhattan.data.frame(
@@ -474,6 +561,7 @@ manhattan.tbl_df = function(
     highlight_genes = highlight_genes,
     highlight_color = highlight_color,
     label_color = label_color,
+    label_max_y_nudge = label_max_y_nudge,
     ...
   )
 }
@@ -492,6 +580,7 @@ manhattan.data.frame = function(
   highlight_genes = NULL,
   highlight_color = "red3",
   label_color = "black",
+  label_max_y_nudge = NULL,
   base_size = 7,
   ...
 ) {
@@ -521,6 +610,7 @@ manhattan.data.frame = function(
     highlight_genes = highlight_genes,
     highlight_color = highlight_color,
     label_color = label_color,
+    label_max_y_nudge = label_max_y_nudge,
     base_size = base_size
   )
 
@@ -542,6 +632,7 @@ manhattan.GWASFormatter = function(
   highlight_genes = NULL,
   highlight_color = "red3",
   label_color = "black",
+  label_max_y_nudge = NULL,
   base_size = 7,
   ...
 ) {
@@ -584,6 +675,7 @@ manhattan.GWASFormatter = function(
     highlight_genes = highlight_genes,
     highlight_color = highlight_color,
     label_color = label_color,
+    label_max_y_nudge = label_max_y_nudge,
     base_size = base_size
   )
 
