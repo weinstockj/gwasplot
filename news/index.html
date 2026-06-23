@@ -59,6 +59,11 @@
 <li>Added <code>label_pvalue_threshold</code> to <code><a href="../reference/manhattan.html">manhattan()</a></code> to control the labeling cutoff independently of the plotted points; defaults to the genome-wide significance line. Genes listed in <code>highlight_genes</code> are still labeled regardless of this threshold by default.</li>
 <li>Added <code>force_highlight_labels</code> to <code><a href="../reference/manhattan.html">manhattan()</a></code> as an opt-out for the default behavior of always displaying genes listed in <code>highlight_genes</code>.</li>
 <li>Added <code>y_axis_break</code> and <code>y_axis_break_scale</code> to <code><a href="../reference/manhattan.html">manhattan()</a></code> to compress the upper <code>-log10(p)</code> tail when one or two extreme peaks dominate the plot. A slash marker is drawn at the compressed y-axis break.</li>
+<li>Added <code>label_size</code>, <code>highlight_label_size</code>, and <code>label_segment_alpha</code> to tune crowded Manhattan label fields without changing which genes are labeled.</li>
+<li>Highlighted Manhattan labels are now deduplicated by displayed label, keeping the strongest variant for each forced gene label.</li>
+<li>Manhattan labels now default to vertical repel so labels stay over their chromosome positions, and forced highlighted labels survive lead-locus thinning.</li>
+<li>The y-axis break slash is now drawn on the y-axis line while preserving all points through continuous compression.</li>
+<li>Manhattan plots now start the y-axis at the minimum plotted <code>-log10(p)</code> value and use slightly larger chromosome labels on the x-axis.</li>
 </ul></div>
 </div>
     <div class="section level2">
