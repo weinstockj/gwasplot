@@ -2,10 +2,11 @@
 
 ## Changed
 
-- `manhattan()` gene labels are now lifted above their points and repelled along
-  the y-axis only, so each name sits directly above its variant instead of
-  overlapping the points. The lift is controlled by the new `label_nudge_y`
-  argument (default: 4% of the plotted y-range; set to 0 to disable).
+- `manhattan()` gene labels now use adaptive nudges and two-dimensional
+  `ggrepel` placement by default, which keeps isolated labels close to their
+  variants while giving crowded labels room to move. Use `label_nudge_y` for a
+  fixed vertical lift or `label_repel_direction = "y"` to keep labels directly
+  above variants.
 - `qqplot()` now renders with a fixed square panel (`aspect.ratio`, default 1)
   instead of `coord_equal()`. A strong GWAS with very large observed
   `-log10(p)` no longer stretches the plot into a tall, thin rectangle. Pass
@@ -39,8 +40,13 @@
   `tibble` inputs are supported via a temporary in-memory DuckDB connection.
 - Added `label_pvalue_threshold` to `manhattan()` to control the labeling
   cutoff independently of the plotted points; defaults to the genome-wide
-  significance line. Genes listed in `highlight_genes` are always labeled
-  regardless of this threshold.
+  significance line. Genes listed in `highlight_genes` are still labeled
+  regardless of this threshold by default.
+- Added `force_highlight_labels` to `manhattan()` as an opt-out for the default
+  behavior of always displaying genes listed in `highlight_genes`.
+- Added `y_axis_break` and `y_axis_break_scale` to `manhattan()` to compress
+  the upper `-log10(p)` tail when one or two extreme peaks dominate the plot.
+  A slash marker is drawn at the compressed y-axis break.
 
 # gwasplot 0.2.0
 

@@ -8,11 +8,15 @@ manhattan(
   gwas,
   output,
   lower_logp_threshold = 3,
+  y_axis_break = NULL,
+  y_axis_break_scale = 0.2,
   label_top_n = NULL,
   label_strategy = "lead_per_locus",
   label_locus_window_kb = 500,
   label_pvalue_threshold = NULL,
   label_nudge_y = NULL,
+  force_highlight_labels = TRUE,
+  label_repel_direction = "both",
   italic_gene_labels = TRUE,
   highlight_genes = NULL,
   highlight_color = "red3",
@@ -28,6 +32,15 @@ manhattan(
 
 \item{lower_logp_threshold}{The lower threshold for the -log10(p-value) to plot. Default is 3.0.}
 
+\item{y_axis_break}{Optional `-log10(p)` value where the upper y-axis should
+be compressed. Values below the break are unchanged; values above are
+compressed by `y_axis_break_scale`, with a slash marker drawn at the break.
+Default NULL (no compression).}
+
+\item{y_axis_break_scale}{Compression factor for values above
+`y_axis_break`. Smaller values create more visual room below the break.
+Must be in (0, 1]. Default 0.2.}
+
 \item{label_top_n}{Integer. If set and a `gene_name` column is present, annotate the
 top N variants (by p-value) with labels using ggrepel. If `gene_name` is missing,
 labels fall back to cytoband-like text (e.g., `chr4p16.3`). Default is NULL (no labels).}
@@ -39,14 +52,22 @@ or `"lead_per_locus"` (one lead per locus, then top N). Default `"lead_per_locus
 `label_strategy = "lead_per_locus"`. Default 500.}
 
 \item{label_pvalue_threshold}{P-value cutoff for labeling: only variants with
-`PVALUE < label_pvalue_threshold` are eligible for labels (genes in
-`highlight_genes` are always labeled regardless). Default NULL, which uses
-the genome-wide significance line (5e-8).}
+`PVALUE < label_pvalue_threshold` are eligible for labels. Genes in
+`highlight_genes` are labeled regardless when `force_highlight_labels = TRUE`.
+Default NULL, which uses the genome-wide significance line (5e-8).}
 
 \item{label_nudge_y}{Vertical distance (in `-log10(p)` units) to lift gene
 labels above their points. Default NULL uses adaptive per-label nudges.
 Set to a number to force the same upward nudge for every label, or 0 to
 disable the upward nudge.}
+
+\item{force_highlight_labels}{Logical. If TRUE, genes in `highlight_genes`
+are labeled even when they do not pass `label_pvalue_threshold` or
+`label_top_n`. Default TRUE.}
+
+\item{label_repel_direction}{Direction passed to `ggrepel`: `"both"` lets
+labels move horizontally and vertically, `"y"` keeps labels aligned above
+variants, and `"x"` repels horizontally. Default `"both"`.}
 
 \item{italic_gene_labels}{Logical. If TRUE, gene labels are italicized; cytoband
 fallback labels remain plain text. Default TRUE.}
