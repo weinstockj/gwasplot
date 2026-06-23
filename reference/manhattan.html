@@ -58,6 +58,7 @@
 <span>  highlight_genes <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  highlight_color <span class="op">=</span> <span class="st">"red3"</span>,</span>
 <span>  label_color <span class="op">=</span> <span class="st">"black"</span>,</span>
+<span>  label_max_y_nudge <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -103,9 +104,9 @@ the genome-wide significance line (5e-8).</p></dd>
 
 <dt id="arg-label-nudge-y">label_nudge_y<a class="anchor" aria-label="anchor" href="#arg-label-nudge-y"></a></dt>
 <dd><p>Vertical distance (in `-log10(p)` units) to lift gene
-labels above their points; labels are repelled along the y-axis only so
-each name sits directly above its variant. Default NULL, which uses 4<!-- % of -->
-the plotted y-range. Set to 0 to disable the upward nudge.</p></dd>
+labels above their points. Default NULL uses adaptive per-label nudges.
+Set to a number to force the same upward nudge for every label, or 0 to
+disable the upward nudge.</p></dd>
 
 
 <dt id="arg-italic-gene-labels">italic_gene_labels<a class="anchor" aria-label="anchor" href="#arg-italic-gene-labels"></a></dt>
@@ -124,6 +125,12 @@ fallback labels remain plain text. Default TRUE.</p></dd>
 
 <dt id="arg-label-color">label_color<a class="anchor" aria-label="anchor" href="#arg-label-color"></a></dt>
 <dd><p>Color for non-highlighted labels. Default `"black"`.</p></dd>
+
+
+<dt id="arg-label-max-y-nudge">label_max_y_nudge<a class="anchor" aria-label="anchor" href="#arg-label-max-y-nudge"></a></dt>
+<dd><p>Maximum adaptive starting nudge for labels in
+`-log10(p)` units. `NULL` chooses a conservative value from the plotted
+y-range. Lower values keep labels closer to variants. Default NULL.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
