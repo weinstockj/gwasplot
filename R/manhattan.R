@@ -144,30 +144,57 @@ calculate_y_axis = function(
   }
 
   max_logp <- max(logp, na.rm = TRUE)
+  min_logp <- min(logp, na.rm = TRUE)
   if (is.null(y_axis_break) || y_axis_break >= max_logp) {
-    breaks <- seq(0, max_logp, by = 4)
-    return(list(breaks = breaks, labels = breaks))
+    tick_start <- ceiling(min_logp / 4) * 4
+    breaks <- if (tick_start <= max_logp) {
+      seq(tick_start, max_logp, by = 4)
+    } else {
+      numeric(0)
+    }
+    original_breaks <- unique(c(min_logp, breaks))
+    return(list(
+      breaks = original_breaks,
+      labels = original_breaks,
+      limits = c(min_logp, max_logp)
+    ))
   }
 
-  lower_breaks <- seq(0, max(0, floor(y_axis_break / 4) * 4), by = 4)
+  lower_tick_start <- ceiling(min_logp / 4) * 4
+  lower_tick_end <- floor(y_axis_break / 4) * 4
+  lower_breaks <- if (lower_tick_start <= lower_tick_end) {
+    seq(lower_tick_start, lower_tick_end, by = 4)
+  } else {
+    numeric(0)
+  }
   upper_breaks <- pretty(c(y_axis_break, max_logp), n = 4)
   upper_breaks <- upper_breaks[upper_breaks > y_axis_break & upper_breaks <= max_logp]
   if (!any(abs(upper_breaks - max_logp) < .Machine$double.eps^0.5)) {
     upper_breaks <- c(upper_breaks, max_logp)
   }
 
-  original_breaks <- unique(c(lower_breaks, upper_breaks))
+  original_breaks <- unique(c(min_logp, lower_breaks, upper_breaks))
   list(
     breaks = transform_manhattan_y(
       original_breaks,
       y_axis_break = y_axis_break,
       y_axis_break_scale = y_axis_break_scale
     ),
-    labels = original_breaks
+    labels = original_breaks,
+    limits = transform_manhattan_y(
+      c(min_logp, max_logp),
+      y_axis_break = y_axis_break,
+      y_axis_break_scale = y_axis_break_scale
+    )
   )
 }
 
-add_y_axis_break_slash = function(plot, prepared_data, y_axis_break) {
+add_y_axis_break_slash = function(
+  plot,
+  prepared_data,
+  y_axis_break,
+  y_limits = NULL
+) {
   if (is.null(y_axis_break) || y_axis_break >= max(prepared_data$LOGP, na.rm = TRUE)) {
     return(plot)
   }
@@ -184,8 +211,8 @@ add_y_axis_break_slash = function(plot, prepared_data, y_axis_break) {
     y_span <- 1
   }
 
-  x0 <- x_range[[1]] + x_span * 0.003
-  x1 <- x_range[[1]] + x_span * 0.015
+  x_axis <- x_range[[1]]
+  x_half_width <- x_span * 0.0075
   slash_y <- transform_manhattan_y(
     y_axis_break,
     y_axis_break = y_axis_break,
@@ -194,14 +221,30 @@ add_y_axis_break_slash = function(plot, prepared_data, y_axis_break) {
   slash_gap <- y_span * 0.012
   slash_half_height <- y_span * 0.018
 
+  axis_data <- tibble::tibble(
+    x = x_axis,
+    xend = x_axis,
+    y = min(prepared_data$LOGP_plot, na.rm = TRUE),
+    yend = max(prepared_data$LOGP_plot, na.rm = TRUE)
+  )
   slash_data <- tibble::tibble(
-    x = c(x0, x0),
-    xend = c(x1, x1),
+    x = c(x_axis - x_half_width, x_axis - x_half_width),
+    xend = c(x_axis + x_half_width, x_axis + x_half_width),
     y = c(slash_y - slash_half_height, slash_y + slash_gap - slash_half_height),
     yend = c(slash_y + slash_half_height, slash_y + slash_gap + slash_half_height)
   )
 
   plot +
+    ggplot2::theme(axis.line.y = ggplot2::element_blank()) +
+    ggplot2::coord_cartesian(ylim = y_limits, clip = "off") +
+    ggplot2::geom_segment(
+      data = axis_data,
+      mapping = ggplot2::aes(x = x, xend = xend, y = y, yend = yend),
+      inherit.aes = FALSE,
+      linewidth = 0.6,
+      lineend = "square",
+      color = "black"
+    ) +
     ggplot2::geom_segment(
       data = slash_data,
       mapping = ggplot2::aes(x = x, xend = xend, y = y, yend = yend),
@@ -304,18 +347,17 @@ select_label_points = function(
   }
 
   # Top N by p-value, while keeping explicitly highlighted genes even if they
-  # would otherwise rank below the cutoff.
-  candidate_highlight <- if (
-    force_highlight_labels && has_gene_col && !is.null(highlight_genes)
-  ) {
-    !is.na(candidates$gene_name) & candidates$gene_name %in% highlight_genes
-  } else {
-    rep(FALSE, nrow(candidates))
-  }
-
+  # would otherwise rank below the cutoff or be removed by lead-locus thinning.
   top_df <- candidates %>%
     dplyr::slice_min(PVALUE, n = label_top_n, with_ties = FALSE)
-  highlight_df <- candidates[candidate_highlight, , drop = FALSE]
+  highlight_df <- if (
+    force_highlight_labels && has_gene_col && !is.null(highlight_genes)
+  ) {
+    prepared_data %>%
+      dplyr::filter(!is.na(gene_name) & gene_name %in% highlight_genes)
+  } else {
+    candidates[FALSE, , drop = FALSE]
+  }
 
   label_df <- dplyr::distinct(dplyr::bind_rows(top_df, highlight_df))
 
@@ -360,7 +402,11 @@ select_label_points = function(
       )
     )
 
-  label_df
+  label_df %>%
+    dplyr::arrange(PVALUE) %>%
+    dplyr::group_by(label_text) %>%
+    dplyr::slice(1) %>%
+    dplyr::ungroup()
 }
 
 # Compute modest, data-aware starting nudges for Manhattan labels.
@@ -459,11 +505,14 @@ create_manhattan_plot = function(
   label_pvalue_threshold = NULL,
   label_nudge_y = NULL,
   force_highlight_labels = TRUE,
-  label_repel_direction = c("both", "y", "x"),
+  label_repel_direction = c("y", "both", "x"),
   italic_gene_labels = TRUE,
   highlight_genes = NULL,
   highlight_color = "red3",
   label_color = "black",
+  label_size = 3,
+  highlight_label_size = NULL,
+  label_segment_alpha = 0.65,
   label_max_y_nudge = NULL,
   base_size = 7
 ) {
@@ -527,7 +576,7 @@ create_manhattan_plot = function(
     ggplot2::theme(
       legend.position = "none",
       axis.title.x = element_blank(),
-      axis.text.x = element_text(size = base_size * 3 / 7),
+      axis.text.x = element_text(size = base_size * 4 / 7),
       axis.text.y = element_text(size = base_size * 5 / 7),
       panel.grid.major.x = element_blank(),
       panel.grid.minor.x = element_blank(),
@@ -537,7 +586,16 @@ create_manhattan_plot = function(
       axis.line.y = element_line(size = .6)
     )
 
-  p <- add_y_axis_break_slash(p, prepared_data, y_axis_break)
+  if (!is.null(y_axis_break) && y_axis_break < max(prepared_data$LOGP, na.rm = TRUE)) {
+    p <- add_y_axis_break_slash(
+      p,
+      prepared_data,
+      y_axis_break,
+      y_limits = y_axis$limits
+    )
+  } else {
+    p <- p + ggplot2::coord_cartesian(ylim = y_axis$limits)
+  }
 
   # Add labels for top points using gene_name when available; otherwise cytoband.
   if (!is.null(label_top_n)) {
@@ -569,7 +627,6 @@ create_manhattan_plot = function(
             label = label_expr
           ),
           parse = TRUE,
-          size = 3,
           max.overlaps = Inf,
           seed = 42,
           direction = label_repel_direction,
@@ -580,7 +637,7 @@ create_manhattan_plot = function(
           max.time = 1,
           max.iter = 20000,
           segment.size = 0.25,
-          segment.alpha = 0.65,
+          segment.alpha = label_segment_alpha,
           segment.color = "grey35",
           min.segment.length = 0
         )
@@ -595,6 +652,7 @@ create_manhattan_plot = function(
               list(
                 data = normal_df,
                 colour = label_color,
+                size = label_size,
                 nudge_y = normal_df$label_nudge_y,
                 inherit.aes = FALSE
               ),
@@ -610,6 +668,7 @@ create_manhattan_plot = function(
                 data = highlight_df,
                 colour = highlight_color,
                 fontface = "bold",
+                size = if (is.null(highlight_label_size)) label_size else highlight_label_size,
                 nudge_y = highlight_df$label_nudge_y,
                 inherit.aes = FALSE
               ),
@@ -673,15 +732,20 @@ save_manhattan_plot = function(plot, output, ...) {
 #' @param force_highlight_labels Logical. If TRUE, genes in `highlight_genes`
 #'   are labeled even when they do not pass `label_pvalue_threshold` or
 #'   `label_top_n`. Default TRUE.
-#' @param label_repel_direction Direction passed to `ggrepel`: `"both"` lets
-#'   labels move horizontally and vertically, `"y"` keeps labels aligned above
-#'   variants, and `"x"` repels horizontally. Default `"both"`.
+#' @param label_repel_direction Direction passed to `ggrepel`: `"y"` keeps
+#'   labels aligned above variants, `"both"` lets labels move horizontally and
+#'   vertically, and `"x"` repels horizontally. Default `"y"`.
 #' @param italic_gene_labels Logical. If TRUE, gene labels are italicized; cytoband
 #'   fallback labels remain plain text. Default TRUE.
 #' @param highlight_genes Optional character vector of gene symbols to highlight
 #'   (e.g., novel genes). Matching labels are colored with `highlight_color`.
 #' @param highlight_color Color for highlighted labels. Default `"red3"`.
 #' @param label_color Color for non-highlighted labels. Default `"black"`.
+#' @param label_size Text size for non-highlighted labels. Default 3.
+#' @param highlight_label_size Text size for highlighted labels. Default NULL,
+#'   which uses `label_size`.
+#' @param label_segment_alpha Alpha transparency for label leader lines.
+#'   Default 0.65.
 #' @param label_max_y_nudge Maximum adaptive starting nudge for labels in
 #'   `-log10(p)` units. `NULL` chooses a conservative value from the plotted
 #'   y-range. Lower values keep labels closer to variants. Default NULL.
@@ -700,11 +764,14 @@ manhattan = function(
   label_pvalue_threshold = NULL,
   label_nudge_y = NULL,
   force_highlight_labels = TRUE,
-  label_repel_direction = "both",
+  label_repel_direction = "y",
   italic_gene_labels = TRUE,
   highlight_genes = NULL,
   highlight_color = "red3",
   label_color = "black",
+  label_size = 3,
+  highlight_label_size = NULL,
+  label_segment_alpha = 0.65,
   label_max_y_nudge = NULL,
   ...
 ) {
@@ -724,11 +791,14 @@ manhattan.tbl_df = function(
   label_pvalue_threshold = NULL,
   label_nudge_y = NULL,
   force_highlight_labels = TRUE,
-  label_repel_direction = "both",
+  label_repel_direction = "y",
   italic_gene_labels = TRUE,
   highlight_genes = NULL,
   highlight_color = "red3",
   label_color = "black",
+  label_size = 3,
+  highlight_label_size = NULL,
+  label_segment_alpha = 0.65,
   label_max_y_nudge = NULL,
   ...
 ) {
@@ -749,6 +819,9 @@ manhattan.tbl_df = function(
     highlight_genes = highlight_genes,
     highlight_color = highlight_color,
     label_color = label_color,
+    label_size = label_size,
+    highlight_label_size = highlight_label_size,
+    label_segment_alpha = label_segment_alpha,
     label_max_y_nudge = label_max_y_nudge,
     ...
   )
@@ -767,11 +840,14 @@ manhattan.data.frame = function(
   label_pvalue_threshold = NULL,
   label_nudge_y = NULL,
   force_highlight_labels = TRUE,
-  label_repel_direction = "both",
+  label_repel_direction = "y",
   italic_gene_labels = TRUE,
   highlight_genes = NULL,
   highlight_color = "red3",
   label_color = "black",
+  label_size = 3,
+  highlight_label_size = NULL,
+  label_segment_alpha = 0.65,
   label_max_y_nudge = NULL,
   base_size = 7,
   ...
@@ -806,6 +882,9 @@ manhattan.data.frame = function(
     highlight_genes = highlight_genes,
     highlight_color = highlight_color,
     label_color = label_color,
+    label_size = label_size,
+    highlight_label_size = highlight_label_size,
+    label_segment_alpha = label_segment_alpha,
     label_max_y_nudge = label_max_y_nudge,
     base_size = base_size
   )
@@ -827,11 +906,14 @@ manhattan.GWASFormatter = function(
   label_pvalue_threshold = NULL,
   label_nudge_y = NULL,
   force_highlight_labels = TRUE,
-  label_repel_direction = "both",
+  label_repel_direction = "y",
   italic_gene_labels = TRUE,
   highlight_genes = NULL,
   highlight_color = "red3",
   label_color = "black",
+  label_size = 3,
+  highlight_label_size = NULL,
+  label_segment_alpha = 0.65,
   label_max_y_nudge = NULL,
   base_size = 7,
   ...
@@ -879,6 +961,9 @@ manhattan.GWASFormatter = function(
     highlight_genes = highlight_genes,
     highlight_color = highlight_color,
     label_color = label_color,
+    label_size = label_size,
+    highlight_label_size = highlight_label_size,
+    label_segment_alpha = label_segment_alpha,
     label_max_y_nudge = label_max_y_nudge,
     base_size = base_size
   )

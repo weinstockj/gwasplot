@@ -47,6 +47,17 @@
 - Added `y_axis_break` and `y_axis_break_scale` to `manhattan()` to compress
   the upper `-log10(p)` tail when one or two extreme peaks dominate the plot.
   A slash marker is drawn at the compressed y-axis break.
+- Added `label_size`, `highlight_label_size`, and `label_segment_alpha` to tune
+  crowded Manhattan label fields without changing which genes are labeled.
+- Highlighted Manhattan labels are now deduplicated by displayed label, keeping
+  the strongest variant for each forced gene label.
+- Manhattan labels now default to vertical repel so labels stay over their
+  chromosome positions, and forced highlighted labels survive lead-locus
+  thinning.
+- The y-axis break slash is now drawn on the y-axis line while preserving all
+  points through continuous compression.
+- Manhattan plots now start the y-axis at the minimum plotted `-log10(p)` value
+  and use slightly larger chromosome labels on the x-axis.
 
 # gwasplot 0.2.0
 

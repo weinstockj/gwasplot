@@ -16,11 +16,14 @@ manhattan(
   label_pvalue_threshold = NULL,
   label_nudge_y = NULL,
   force_highlight_labels = TRUE,
-  label_repel_direction = "both",
+  label_repel_direction = "y",
   italic_gene_labels = TRUE,
   highlight_genes = NULL,
   highlight_color = "red3",
   label_color = "black",
+  label_size = 3,
+  highlight_label_size = NULL,
+  label_segment_alpha = 0.65,
   label_max_y_nudge = NULL,
   ...
 )
@@ -53,8 +56,9 @@ or `"lead_per_locus"` (one lead per locus, then top N). Default `"lead_per_locus
 
 \item{label_pvalue_threshold}{P-value cutoff for labeling: only variants with
 `PVALUE < label_pvalue_threshold` are eligible for labels. Genes in
-`highlight_genes` are labeled regardless when `force_highlight_labels = TRUE`.
-Default NULL, which uses the genome-wide significance line (5e-8).}
+`highlight_genes` are labeled regardless when
+`force_highlight_labels = TRUE`. Default NULL, which uses the genome-wide
+significance line (5e-8).}
 
 \item{label_nudge_y}{Vertical distance (in `-log10(p)` units) to lift gene
 labels above their points. Default NULL uses adaptive per-label nudges.
@@ -65,9 +69,9 @@ disable the upward nudge.}
 are labeled even when they do not pass `label_pvalue_threshold` or
 `label_top_n`. Default TRUE.}
 
-\item{label_repel_direction}{Direction passed to `ggrepel`: `"both"` lets
-labels move horizontally and vertically, `"y"` keeps labels aligned above
-variants, and `"x"` repels horizontally. Default `"both"`.}
+\item{label_repel_direction}{Direction passed to `ggrepel`: `"y"` keeps
+labels aligned above variants, `"both"` lets labels move horizontally and
+vertically, and `"x"` repels horizontally. Default `"y"`.}
 
 \item{italic_gene_labels}{Logical. If TRUE, gene labels are italicized; cytoband
 fallback labels remain plain text. Default TRUE.}
@@ -78,6 +82,14 @@ fallback labels remain plain text. Default TRUE.}
 \item{highlight_color}{Color for highlighted labels. Default `"red3"`.}
 
 \item{label_color}{Color for non-highlighted labels. Default `"black"`.}
+
+\item{label_size}{Text size for non-highlighted labels. Default 3.}
+
+\item{highlight_label_size}{Text size for highlighted labels. Default NULL,
+which uses `label_size`.}
+
+\item{label_segment_alpha}{Alpha transparency for label leader lines.
+Default 0.65.}
 
 \item{label_max_y_nudge}{Maximum adaptive starting nudge for labels in
 `-log10(p)` units. `NULL` chooses a conservative value from the plotted
