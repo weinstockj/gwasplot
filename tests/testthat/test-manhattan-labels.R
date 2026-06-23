@@ -217,6 +217,35 @@ test_that("calculate_y_axis starts uncompressed plots at observed minimum", {
   expect_equal(axis$breaks[[1]], 3.2)
 })
 
+test_that("highlighted and regular labels share one repel layer", {
+  prepared_data <- tibble::tibble(
+    CHROM = "chr1",
+    POS = 1:4,
+    PVALUE = c(1e-12, 1e-9, 1e-6, 1e-5),
+    CHROM_index = 1L,
+    chr_len = 1,
+    tot = 0,
+    POScum = c(1, 1.01, 1.02, 1.03),
+    gene_name = c("TOP", "SECOND", "HILITE", "HILITE")
+  )
+  axis_data <- tibble::tibble(CHROM = "chr1", CHROM_index = 1L, center = 1.015)
+
+  p <- create_manhattan_plot(
+    prepared_data,
+    axis_data,
+    label_top_n = 1,
+    highlight_genes = "HILITE",
+    label_pvalue_threshold = 5e-8,
+    highlight_color = "red3",
+    label_color = "black"
+  )
+  built <- ggplot2::ggplot_build(p)
+  label_layer <- built$data[[length(built$data)]]
+
+  expect_equal(nrow(label_layer), 2)
+  expect_setequal(label_layer$colour, c("black", "red3"))
+})
+
 test_that("compressed Manhattan plot includes a break slash layer", {
   prepared_data <- tibble::tibble(
     CHROM = "chr1",

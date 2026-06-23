@@ -620,62 +620,48 @@ create_manhattan_plot = function(
           label_max_y_nudge = label_max_y_nudge
         )
 
-        common_repel_args <- list(
+        label_df <- label_df %>%
+          dplyr::mutate(
+            label_plot_color = ifelse(
+              label_is_highlight,
+              highlight_color,
+              label_color
+            ),
+            label_plot_fontface = ifelse(label_is_highlight, "bold", "plain"),
+            label_plot_size = ifelse(
+              label_is_highlight & !is.null(highlight_label_size),
+              highlight_label_size,
+              label_size
+            )
+          )
+
+        p <- p + ggrepel::geom_text_repel(
+          data = label_df,
           mapping = ggplot2::aes(
             x = POScum,
             y = LOGP_plot,
             label = label_expr
           ),
           parse = TRUE,
+          colour = label_df$label_plot_color,
+          fontface = label_df$label_plot_fontface,
+          size = label_df$label_plot_size,
           max.overlaps = Inf,
           seed = 42,
           direction = label_repel_direction,
-          box.padding = 0.25,
+          box.padding = 0.3,
           point.padding = 0.15,
-          force = 0.25,
+          force = 0.35,
           force_pull = 1.5,
-          max.time = 1,
-          max.iter = 20000,
+          max.time = 2,
+          max.iter = 30000,
           segment.size = 0.25,
           segment.alpha = label_segment_alpha,
           segment.color = "grey35",
-          min.segment.length = 0
+          min.segment.length = 0,
+          nudge_y = label_df$label_nudge_y,
+          inherit.aes = FALSE
         )
-
-        normal_df <- label_df %>% dplyr::filter(!label_is_highlight)
-        highlight_df <- label_df %>% dplyr::filter(label_is_highlight)
-
-        if (nrow(normal_df) > 0) {
-          p <- p + do.call(
-            ggrepel::geom_text_repel,
-            c(
-              list(
-                data = normal_df,
-                colour = label_color,
-                size = label_size,
-                nudge_y = normal_df$label_nudge_y,
-                inherit.aes = FALSE
-              ),
-              common_repel_args
-            )
-          )
-        }
-        if (nrow(highlight_df) > 0) {
-          p <- p + do.call(
-            ggrepel::geom_text_repel,
-            c(
-              list(
-                data = highlight_df,
-                colour = highlight_color,
-                fontface = "bold",
-                size = if (is.null(highlight_label_size)) label_size else highlight_label_size,
-                nudge_y = highlight_df$label_nudge_y,
-                inherit.aes = FALSE
-              ),
-              common_repel_args
-            )
-          )
-        }
       }
     } else {
       cli::cli_warn(

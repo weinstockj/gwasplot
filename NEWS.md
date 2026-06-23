@@ -58,6 +58,8 @@
   points through continuous compression.
 - Manhattan plots now start the y-axis at the minimum plotted `-log10(p)` value
   and use slightly larger chromosome labels on the x-axis.
+- Highlighted and regular Manhattan labels now share a single `ggrepel` solve
+  so red and black labels avoid each other.
 
 # gwasplot 0.2.0
 
